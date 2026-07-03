@@ -1,3 +1,5 @@
+import "@knowledge/shared";
+
 import express from "express";
 
 const app = express();

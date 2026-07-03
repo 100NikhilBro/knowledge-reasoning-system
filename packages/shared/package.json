@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "description": "Shared types and utilities",
+  "main": "dist/index.js",
+"types": "dist/index.d.ts",
   "exports": {
     ".": "./src/index.ts"
   },
