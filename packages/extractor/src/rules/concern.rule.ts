@@ -1,4 +1,4 @@
-import type { ParsedDocument } from "@knowledge/shared";
+import type { ParsedDocument } from "@knowledge/parser";
 import type { ExtractionRule } from "../contracts/extraction-rule.js";
 import type { KnowledgeEntity } from "../models/entity.js";
 

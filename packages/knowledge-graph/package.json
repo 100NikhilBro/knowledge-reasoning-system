@@ -5,15 +5,20 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "test": "vitest --run"
   },
   "dependencies": {
+    "@knowledge/extractor": "workspace:*",
+    "@knowledge/parser": "workspace:*",
+    "@knowledge/shared": "workspace:*",
     "dotenv": "^17.4.2",
     "neo4j-driver": "^6.2.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
     "tsx": "^4.23.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

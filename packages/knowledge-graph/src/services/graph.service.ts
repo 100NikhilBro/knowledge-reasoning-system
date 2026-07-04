@@ -1,5 +1,9 @@
 import { driver, closeDriver } from "../config/neo4j.js";
 
+import type {
+  KnowledgeEntity,
+  KnowledgeRelationship
+} from "@knowledge/shared";
 
 interface GraphHealth{}
 
@@ -19,46 +23,52 @@ export class GraphService {
     };
   }
 
-  async seedSampleGraph() {
+  async initialize(): Promise<void> {
 
-    await this.repository.run(`
-      CREATE
-      (p:Proposal {
-        id:'PEP-484',
-        title:'Type Hints',
-        status:'Accepted'
-      }),
+  await this.repository.initializeSchema();
 
-      (a:Author {
-        name:'Guido van Rossum'
-      }),
+}
 
-      (f:Feature {
-        name:'Typing'
-      }),
+  // async seedSampleGraph() {
 
-      (c:Concern {
-        name:'Readability'
-      }),
+  //   await this.repository.run(`
+  //     CREATE
+  //     (p:Proposal {
+  //       id:'PEP-484',
+  //       title:'Type Hints',
+  //       status:'Accepted'
+  //     }),
 
-      (d:Decision {
-        outcome:'Accepted'
-      }),
+  //     (a:Author {
+  //       name:'Guido van Rossum'
+  //     }),
 
-      (v:PythonVersion {
-        version:'3.5'
-      })
+  //     (f:Feature {
+  //       name:'Typing'
+  //     }),
 
-      CREATE
-      (p)-[:PROPOSED_BY]->(a),
-      (p)-[:INTRODUCES]->(f),
-      (p)-[:ADDRESSES]->(c),
-      (p)-[:RESULTS_IN]->(d),
-      (d)-[:IMPLEMENTED_IN]->(v)
-    `);
+  //     (c:Concern {
+  //       name:'Readability'
+  //     }),
 
-    console.log("Sample graph inserted.");
-  }
+  //     (d:Decision {
+  //       outcome:'Accepted'
+  //     }),
+
+  //     (v:PythonVersion {
+  //       version:'3.5'
+  //     })
+
+  //     CREATE
+  //     (p)-[:PROPOSED_BY]->(a),
+  //     (p)-[:INTRODUCES]->(f),
+  //     (p)-[:ADDRESSES]->(c),
+  //     (p)-[:RESULTS_IN]->(d),
+  //     (d)-[:IMPLEMENTED_IN]->(v)
+  //   `);
+
+  //   console.log("Sample graph inserted.");
+  // }
 
 
 
@@ -71,6 +81,43 @@ export class GraphService {
 
 //   console.log("Sample graph inserted.");
 // }
+
+
+async ingest(
+  entities: KnowledgeEntity[],
+  relationships: KnowledgeRelationship[]
+): Promise<void> {
+
+  await this.repository.persist(
+    entities,
+    relationships
+  );
+
+}
+
+
+async getNode(id: string) {
+  return this.repository.findNodeById(id);
+}
+
+async getNodesByType(type: string) {
+  return this.repository.findNodesByType(type);
+}
+
+async getNeighbors(id: string) {
+  return this.repository.findNeighbors(id);
+}
+
+async getRelationships(id: string) {
+  return this.repository.findRelationships(id);
+}
+
+async findPath(
+  from: string,
+  to: string
+) {
+  return this.repository.findPath(from, to);
+}
 
   async disconnect() {
     await closeDriver();
