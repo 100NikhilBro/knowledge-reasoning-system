@@ -2,6 +2,8 @@ import type { ParsedDocument } from "@knowledge/parser";
 import type { KnowledgeEntity } from "../models/entity.js";
 import type { ExtractionRule } from "../contracts/extraction-rule.js";
 
+import { buildGraphId } from "@knowledge/shared";
+
 export class ProposalRule implements ExtractionRule {
 
 readonly name = "ProposalRule";
@@ -10,7 +12,10 @@ readonly name = "ProposalRule";
 
     return {
 
-  id: `proposal:PEP-${document.metadata.pep}`,
+  id: buildGraphId(
+  "Proposal",
+  `PEP-${document.metadata.pep}`
+),
 
   type: "Proposal",
 
