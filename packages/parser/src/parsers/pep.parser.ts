@@ -1,20 +1,94 @@
-import type { ParsedDocument } from "../models/parsed-document.js";
-import type { Section } from "../models/parsed-document.js";
+import type {
+  ParsedDocument,
+  ParseResult,
+  Section
+} from "../models/parsed-document.js";
+
+import { ParserValidator } from "../validators/parser.validator.js";
+
+import { ParserState } from "../enums/parser-state.js";
 
 export class PEPParser {
 
-  parse(markdown: string): ParsedDocument {
+  private validator = new ParserValidator();
 
-    const metadata: Record<string, string> = {};
-    
+  parse(markdown: string): ParseResult {
 
-const sections: Section[] = [];
+    const normalized = this.normalize(markdown);
 
-    const lines = markdown.split(/\r?\n/);
+    const lines = normalized.split("\n");
 
-    // -------------------------
-    // Metadata
-    // -------------------------
+    const metadata = this.parseMetadata(lines);
+
+    const sections = this.parseSections(lines);
+
+    const document = this.buildDocument(
+      normalized,
+      metadata,
+      sections
+    );
+
+    this.validator.validate(document);
+
+    return {
+      document,
+      errors: []
+    };
+
+  }
+
+  private normalize(markdown: string): string {
+
+    return markdown
+      .replace(/\r\n/g, "\n")
+      .replace(/\t/g, " ")
+      .trim();
+
+  }
+
+  private parseMetadata(lines: string[]): Record<string, string> {
+
+  const metadata: Record<string, string> = {};
+
+  let state = ParserState.READ_METADATA;
+
+  for (const rawLine of lines) {
+
+    const line = rawLine.trim();
+
+    if (state === ParserState.READ_METADATA) {
+
+      if (line === "") {
+        continue;
+      }
+
+      if (!line.includes(":")) {
+        state = ParserState.READ_SECTION;
+        break;
+      }
+
+      const [key, ...value] = line.split(":");
+
+      const normalizedKey = key
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+
+      metadata[normalizedKey] = value.join(":").trim();
+
+    }
+
+  }
+
+  return metadata;
+
+}
+
+  private parseSections(lines: string[]): Section[] {
+
+    const sections: Section[] = [];
+
+    let currentSection: Section | null = null;
 
     let index = 0;
 
@@ -22,50 +96,20 @@ const sections: Section[] = [];
 
       const line = lines[index].trim();
 
-      if (line === "") {
-        index++;
-        continue;
-      }
-
-      if (!line.includes(":")) {
-        break;
-      }
-
-      const [key, ...value] = line.split(":");
-
-const normalizedKey = key
-  .trim()
-  .toLowerCase()
-  .replace(/\s+/g, "_");
-
-metadata[normalizedKey] = value.join(":").trim();
-
-      index++;
-    }
-
-    // -------------------------
-    // Sections
-    // -------------------------
-
-    let currentSection: Section | null = null;
-
-    while (index < lines.length) {
-
-      const line = lines[index].trim();
-
-      // Heading detected
       if (
         index + 1 < lines.length &&
-        /^[=]+$/.test(lines[index + 1].trim())
+        /^([=-]+)$/.test(lines[index + 1].trim())
       ) {
 
-        currentSection = {
-  title: line,
-  level: 1,
-  content: ""
-};
+        const underline = lines[index + 1].trim();
 
-sections.push(currentSection);
+        currentSection = {
+          title: line,
+          level: underline.startsWith("=") ? 1 : 2,
+          content: ""
+        };
+
+        sections.push(currentSection);
 
         index += 2;
 
@@ -75,24 +119,33 @@ sections.push(currentSection);
       if (currentSection && line !== "") {
 
         if (currentSection.content.length > 0) {
-  currentSection.content += " ";
-}
+          currentSection.content += " ";
+        }
 
-currentSection.content += line;
+        currentSection.content += line;
+
       }
 
       index++;
+
     }
 
-   return {
-  success: true,
-  document: {
-    metadata,
-    sections,
-    raw: markdown,
-    warnings: []
+    return sections;
+
   }
-};
+
+  private buildDocument(
+    raw: string,
+    metadata: Record<string, string>,
+    sections: Section[]
+  ): ParsedDocument {
+
+    return {
+      metadata,
+      sections,
+      raw,
+      warnings: []
+    };
 
   }
 

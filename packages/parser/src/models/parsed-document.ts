@@ -17,6 +17,6 @@ export interface ParsedDocument {
 }
 
 export interface ParseResult {
-  success: boolean;
   document: ParsedDocument;
+  errors: string[];
 }
