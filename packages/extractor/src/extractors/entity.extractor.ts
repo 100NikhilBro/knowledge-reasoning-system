@@ -1,25 +1,39 @@
 import type { ParsedDocument } from "@knowledge/shared";
 
 import type { KnowledgeEntity } from "../models/entity.js";
+import type { ExtractionRule } from "../contracts/extraction-rule.js";
 
 import { ProposalRule } from "../rules/proposal.rule.js";
 import { AuthorRule } from "../rules/author.rule.js";
 
+
+import { FeatureRule } from "../rules/feature.rule.js";
+import { ConcernRule } from "../rules/concern.rule.js";
+
 export class EntityExtractor {
 
-  private proposalRule = new ProposalRule();
-
-  private authorRule = new AuthorRule();
+  private readonly rules: ExtractionRule[] = [
+  new ProposalRule(),
+  new AuthorRule(),
+  new FeatureRule(),
+  new ConcernRule()
+];
 
   extract(document: ParsedDocument): KnowledgeEntity[] {
 
-    return [
+    const entities: KnowledgeEntity[] = [];
 
-      this.proposalRule.extract(document),
+    for (const rule of this.rules) {
 
-      this.authorRule.extract(document)
+      const entity = rule.extract(document);
 
-    ];
+      if (entity) {
+        entities.push(entity);
+      }
+
+    }
+
+    return entities;
 
   }
 

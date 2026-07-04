@@ -1,25 +1,34 @@
 import type { ParsedDocument } from "@knowledge/shared";
 import type { KnowledgeEntity } from "../models/entity.js";
+import type { ExtractionRule } from "../contracts/extraction-rule.js";
 
-export class AuthorRule {
+export class AuthorRule implements ExtractionRule{
+
+    readonly name = "AuthorRule";
 
   extract(document: ParsedDocument): KnowledgeEntity {
 
     return {
 
-      id: document.metadata.author
-        .toLowerCase()
-        .replace(/\s+/g, "-"),
+  id: `author:${document.metadata.author
+    .toLowerCase()
+    .replace(/\s+/g, "-")}`,
 
-      type: "Author",
+  type: "Author",
 
-      properties: {
+  label: document.metadata.author,
 
-        name: document.metadata.author
+  source: "pep-484.md",
 
-      }
+  confidence: 1.0,
 
-    };
+  properties: {
+
+    name: document.metadata.author
+
+  }
+
+};
 
   }
 

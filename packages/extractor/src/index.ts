@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { RelationshipExtractor } from "./extractors/relationship.extractor.js";
 import { PEPParser } from "@knowledge/parser";
 import { EntityExtractor } from "./extractors/entity.extractor.js";
 
@@ -22,6 +23,18 @@ const result = parser.parse(markdown);
 
 const extractor = new EntityExtractor();
 
-const entities = extractor.extract(result.document);
+const entityExtractor = new EntityExtractor();
 
-console.dir(entities, { depth: null });
+const entities = entityExtractor.extract(result.document);
+
+const relationshipExtractor = new RelationshipExtractor();
+
+const relationships = relationshipExtractor.extract(entities);
+
+console.log("\n========== ENTITIES ==========\n");
+
+console.dir(entities,{depth:null});
+
+console.log("\n====== RELATIONSHIPS ======\n");
+
+console.dir(relationships,{depth:null});

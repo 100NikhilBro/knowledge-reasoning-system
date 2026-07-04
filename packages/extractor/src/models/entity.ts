@@ -4,6 +4,12 @@ export interface KnowledgeEntity {
 
   type: string;
 
+  label: string;
+
+  source: string;
+
+  confidence: number;
+
   properties: Record<string, unknown>;
 
 }

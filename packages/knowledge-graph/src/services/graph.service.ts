@@ -1,12 +1,15 @@
 import { driver, closeDriver } from "../config/neo4j.js";
 
+
+interface GraphHealth{}
+
 import { GraphRepository } from "../repositories/graph.repository.js";
 
 export class GraphService {
 
   private repository = new GraphRepository();
 
-  async healthCheck() {
+  async healthCheck():Promise<GraphHealth> {
     const serverInfo = await driver.getServerInfo();
 
     return {
