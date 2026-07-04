@@ -1,25 +1,19 @@
 {
-  "name": "@knowledge/parser",
+  "name": "@knowledge/extractor",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-
-  "exports": "./src/index.ts",
-
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc",
-    "test": "vitest"
+    "build": "tsc"
   },
-
   "dependencies": {
+    "@knowledge/parser": "workspace:*",
     "@knowledge/shared": "workspace:*"
   },
-
   "devDependencies": {
     "@types/node": "^26.1.0",
     "tsx": "^4.23.0",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "typescript": "^6.0.3"
   }
 }

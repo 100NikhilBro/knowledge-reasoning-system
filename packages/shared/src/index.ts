@@ -6,3 +6,5 @@ export * from "./contracts/response.js";
 
 export * from "./enums/entity-type.js";
 export * from "./enums/relationship-type.js";
+
+export * from "./contracts/parsed-document.js";

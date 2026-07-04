@@ -1,4 +1,4 @@
-import type { ParsedDocument } from "../models/parsed-document.js";
+import type { ParsedDocument } from "@knowledge/shared";
 
 export class ParserValidator {
 

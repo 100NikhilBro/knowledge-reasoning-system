@@ -2,7 +2,7 @@ import type {
   ParsedDocument,
   ParseResult,
   Section
-} from "../models/parsed-document.js";
+} from "@knowledge/shared";
 
 import { ParserValidator } from "../validators/parser.validator.js";
 
