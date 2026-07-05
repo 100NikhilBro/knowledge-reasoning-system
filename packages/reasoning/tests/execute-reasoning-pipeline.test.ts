@@ -29,18 +29,10 @@ describe(
           buildReasoningPipeline();
 
         expect(
-
-          executeReasoningPipeline(
-
-            pipeline
-
-          )
-
-        ).toEqual(
-
-          pipeline.stages
-
-        );
+  executeReasoningPipeline(pipeline)
+).toEqual(
+  pipeline.steps.map(step => step.name)
+);
 
       }
 

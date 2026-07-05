@@ -23,10 +23,8 @@ describe(
           buildReasoningPipeline();
 
         expect(
-
-          pipeline.stages.length
-
-        ).toBeGreaterThan(0);
+  pipeline.steps.length
+).toBeGreaterThan(0);
 
       }
 
