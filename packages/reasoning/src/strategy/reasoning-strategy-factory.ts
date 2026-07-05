@@ -14,6 +14,12 @@ import type {
   ReasoningStrategy
 } from "./reasoning-strategy.js";
 
+import {
+
+  ComparisonStrategy
+
+} from "./comparison.strategy.js";
+
 export class ReasoningStrategyFactory {
 
   static create(
@@ -22,17 +28,25 @@ export class ReasoningStrategyFactory {
 
   ): ReasoningStrategy {
 
-    switch (plan.strategy) {
+    switch (
 
-      case "multi-hop":
+  plan.strategy
 
-        return new MultiHopStrategy();
+) {
 
-      default:
+  case "comparison":
 
-        return new SingleHopStrategy();
+    return new ComparisonStrategy();
 
-    }
+  case "multi-hop":
+
+    return new MultiHopStrategy();
+
+  default:
+
+    return new SingleHopStrategy();
+
+}
 
   }
 

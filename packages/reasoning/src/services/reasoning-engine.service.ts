@@ -86,7 +86,9 @@ await this.synthesizer.synthesize(
 
 return this.generator.generate(
 
-    synthesized
+  synthesized,
+
+  // synthesized.comparison
 
 );
 

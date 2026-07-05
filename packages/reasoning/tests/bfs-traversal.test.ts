@@ -2,7 +2,8 @@ import {
 
   describe,
   expect,
-  it
+  it,
+  vi
 
 } from "vitest";
 
@@ -20,19 +21,77 @@ describe(
 
     it(
 
-      "should instantiate",
+      "should return starting node when graph has no neighbors",
 
-      () => {
+      async () => {
 
         const traversal =
 
           new BFSTraversal();
 
+        const graph = {
+
+          findNeighbors:
+
+            vi.fn()
+
+              .mockResolvedValue([])
+
+        };
+
+        const result =
+
+          await traversal.traverse(
+
+            graph as any,
+
+            {
+
+              evidence: [
+
+                {
+
+                  entity: {
+
+                    id: "A",
+
+                    type: "Proposal",
+
+                    label: "A",
+
+                    source: "test",
+
+                    confidence: 1,
+
+                    properties: {}
+
+                  },
+
+                  score: 1,
+
+                  source: "graph"
+
+                }
+
+              ]
+
+            },
+
+            3
+
+          );
+
         expect(
 
-          traversal
+          result
 
-        ).toBeDefined();
+        ).toHaveLength(1);
+
+        expect(
+
+          result[0].id
+
+        ).toBe("A");
 
       }
 

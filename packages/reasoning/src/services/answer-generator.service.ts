@@ -1,22 +1,15 @@
-
 import type {
   EvidenceSet,
   ReasoningResult
 } from "@knowledge/shared";
 
 import {
-
   buildTrace
-
-}
-
-from "../utils/trace-builder.js";
+} from "../utils/trace-builder.js";
 
 import type {
   AnswerGenerator
 } from "../contracts/answer-generator.js";
-
-
 
 import {
   DefaultConfidenceEngine
@@ -26,62 +19,66 @@ import {
   DefaultCitationBuilder
 } from "./citation-builder.service.js";
 
-
-
-
 export class DefaultAnswerGenerator
 implements AnswerGenerator {
 
-
-    constructor(
+  constructor(
 
     private readonly confidence =
-
       new DefaultConfidenceEngine(),
 
     private readonly citations =
-
       new DefaultCitationBuilder()
 
   ) {}
 
   async generate(
 
-    evidence: EvidenceSet
+    evidence: EvidenceSet,
+
+    // comparison?: string
 
   ): Promise<ReasoningResult> {
 
-    const answer =
+ const answer =
 
-      evidence.evidence
+  evidence.comparison ??
 
-        .map(item =>
+  evidence.evidence
 
-          `${item.entity.type}: ${item.entity.label}`
+    .map(
 
-        )
+      item =>
 
-        .join("\n");
+        `${item.entity.type}: ${item.entity.label}`
+
+    )
+
+    .join("\n");
 
     const confidence =
 
-  await this.confidence.calculate(
+      await this.confidence.calculate(
 
-    evidence
+        evidence
 
-  );
+      );
 
-const citations =
+    const citations =
 
-  await this.citations.build(
+      await this.citations.build(
 
-    evidence
+        evidence
 
-  );
+      );
 
-return {
+    return {
 
   answer,
+
+  comparison:
+
+    evidence.comparison,
 
   confidence,
 

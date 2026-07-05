@@ -50,6 +50,14 @@ implements ReasoningPlanner {
 
   strategy,
 
+  traversal:
+
+    strategy === "multi-hop"
+
+      ? "bfs"
+
+      : "dfs",
+
   maxDepth:
 
     strategy === "multi-hop"

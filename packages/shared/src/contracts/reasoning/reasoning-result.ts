@@ -14,4 +14,6 @@ export interface ReasoningResult {
 
   trace: ReasoningTrace;
 
+  comparison?: string;
+
 }

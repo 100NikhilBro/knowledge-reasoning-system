@@ -72,3 +72,43 @@ describe(
   }
 
 );
+
+it(
+
+  "should prefer comparison answer",
+
+  async () => {
+
+    const generator =
+
+      new DefaultAnswerGenerator();
+
+    const result =
+
+      await generator.generate(
+
+  {
+
+    evidence: [],
+
+    comparison:
+
+      "Common: Typing"
+
+  }
+
+);
+
+    expect(
+
+      result.answer
+
+    ).toContain(
+
+      "Common"
+
+    );
+
+  }
+
+);

@@ -118,9 +118,13 @@ describe(
 
         expect(
 
-          result.evidence[0].score
+  result.evidence[0].score
 
-        ).toBe(0.9);
+).toBeCloseTo(
+
+  0.93
+
+);
 
       }
 

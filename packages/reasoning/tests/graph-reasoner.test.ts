@@ -42,9 +42,13 @@ describe(
           await service.reason(
 
            {
-  strategy: "multi-hop",
 
-  maxDepth: 3
+strategy: "multi-hop",
+
+traversal: "bfs",
+
+maxDepth: 3
+
 },
 
             {

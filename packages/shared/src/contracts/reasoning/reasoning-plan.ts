@@ -26,9 +26,17 @@ export type ReasoningStrategy =
 
   | "explanation";
 
+export type TraversalType =
+
+  | "bfs"
+
+  | "dfs";
+
 export interface ReasoningPlan {
 
   strategy: ReasoningStrategy;
+
+  traversal: TraversalType;
 
   maxDepth: number;
 

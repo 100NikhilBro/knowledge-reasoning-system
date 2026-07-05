@@ -28,9 +28,11 @@ describe(
 
           ReasoningStrategyFactory.create({
 
-    strategy: "multi-hop",
+strategy: "multi-hop",
 
-    maxDepth: 3
+traversal: "bfs",
+
+maxDepth: 3
 
 });
 
@@ -43,6 +45,35 @@ describe(
       }
 
     );
+
+  }
+
+);
+
+
+it(
+
+  "creates comparison strategy",
+
+  () => {
+
+    const strategy =
+
+      ReasoningStrategyFactory.create({
+
+        strategy: "comparison",
+
+        traversal: "bfs",
+
+        maxDepth: 1
+
+      });
+
+    expect(
+
+      strategy
+
+    ).toBeDefined();
 
   }
 

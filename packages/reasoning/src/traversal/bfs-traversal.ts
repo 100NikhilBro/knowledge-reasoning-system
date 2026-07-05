@@ -4,12 +4,34 @@ import type {
 } from "@knowledge/shared";
 
 import {
+
+  buildPropagatedConfidence
+
+} from "../utils/build-propagated-confidence.js";
+
+import {
+  propagateConfidence
+} from "../utils/propagate-confidence.js";
+
+import {
   GraphTraversalService
 } from "@knowledge/graph";
 
 import type {
   GraphTraversal
 } from "../contracts/graph-traversal.js";
+
+import type {
+  TraversalState
+} from "../types/traversal-state.js";
+
+import {
+  TraversalGuard
+} from "../utils/traversal-guard.js";
+
+import {
+  TraversalLimiter
+} from "../utils/traversal-limiter.js";
 
 export class BFSTraversal
 implements GraphTraversal {
@@ -20,50 +42,79 @@ implements GraphTraversal {
 
     evidence: EvidenceSet,
 
-    depth: number
+    maxDepth: number
 
   ): Promise<KnowledgeEntity[]> {
 
-    const queue =
+    const limiter =
 
-      evidence.evidence.map(
+      new TraversalLimiter({
 
-        item => item.entity
+        maxDepth,
 
-      );
+        maxNodes: 100
 
-    const visited =
+      });
 
-      new Set<string>();
+    const state: TraversalState = {
 
-    const result: KnowledgeEntity[] = [];
+      queue:
 
-    let currentDepth = 0;
+        evidence.evidence.map(
+
+          item => item.entity
+
+        ),
+
+      visited:
+
+        new TraversalGuard(),
+
+      result: [],
+
+      depth: 0
+
+    };
 
     while (
 
-      queue.length &&
-      currentDepth < depth
+      state.queue.length > 0 &&
+
+      limiter.canContinue(
+
+        state.depth,
+
+        state.visited.size()
+
+      )
 
     ) {
 
-      const size = queue.length;
+      const levelSize =
+
+        state.queue.length;
 
       for (
 
         let i = 0;
 
-        i < size;
+        i < levelSize;
 
         i++
 
       ) {
 
-        const node = queue.shift()!;
+        const current =
+
+          state.queue.shift()!;
 
         if (
 
-          visited.has(node.id)
+          state.visited.has(
+
+            current.id
+
+          )
 
         ) {
 
@@ -71,17 +122,31 @@ implements GraphTraversal {
 
         }
 
-        visited.add(node.id);
+        state.visited.add(
 
-        result.push(node);
+          current.id
+
+        );
+
+        state.result.push({
+
+  ...current,
+
+  ...buildPropagatedConfidence(
+
+  state.depth
+
+)
+
+});
 
         const neighbors =
 
           await graph.findNeighbors(
 
-            node.type,
+            current.type,
 
-            node.id
+            current.id
 
           );
 
@@ -91,21 +156,33 @@ implements GraphTraversal {
 
         ) {
 
-          queue.push(
+          if (
 
-            neighbor.neighbor
+            !state.visited.has(
 
-          );
+              neighbor.neighbor.id
+
+            )
+
+          ) {
+
+            state.queue.push(
+
+              neighbor.neighbor
+
+            );
+
+          }
 
         }
 
       }
 
-      currentDepth++;
+      state.depth++;
 
     }
 
-    return result;
+    return state.result;
 
   }
 

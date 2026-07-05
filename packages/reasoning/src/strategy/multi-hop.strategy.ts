@@ -89,11 +89,17 @@ import {
   BFSTraversal
 } from "../traversal/bfs-traversal.js";
 
+import {
+
+  TraversalFactory
+
+} from "../traversal/traversal-factory.js";
+
 export class MultiHopStrategy
 implements ReasoningStrategy {
 
-  private readonly traversal =
-    new BFSTraversal();
+  // private readonly traversal =
+  //   new BFSTraversal();
 
   async execute(
 
@@ -105,20 +111,25 @@ implements ReasoningStrategy {
 
   ): Promise<EvidenceSet> {
 
-    const nodes =
+    const traversal =
 
-      await this.traversal.traverse(
+  TraversalFactory.create(
 
-        graph,
+    plan.traversal
 
-        evidence,
+  );
 
-        // 2
+const nodes =
 
-        plan.maxDepth
+  await traversal.traverse(
 
-      );
+    graph,
 
+    evidence,
+
+    plan.maxDepth
+
+  );
     const expanded: Evidence[] =
 
       nodes.map(node => ({
