@@ -27,6 +27,28 @@ import {
   DefaultAnswerGenerator
 } from "./answer-generator.service.js";
 
+
+
+import {
+
+  buildAnswerExplanation
+
+} from "../utils/build-answer-explanation.js";
+
+import {
+
+  buildReasoningTrace
+
+} from "../utils/build-reasoning-trace.js";
+
+import {
+
+  buildExplanationPipeline
+
+} from "../utils/build-explanation-pipeline.js";
+
+
+
 export class DefaultReasoningEngine
 implements ReasoningEngine {
 
@@ -49,49 +71,97 @@ implements ReasoningEngine {
 
   ) {}
 
-  async reason(
+async reason(
 
-    request: ReasoningRequest
+  request: ReasoningRequest
 
-  ): Promise<ReasoningResult> {
+): Promise<ReasoningResult> {
 
-   const collected =
+  const collected =
 
-await this.collector.collect(
-    request
-);
+    await this.collector.collect(
 
-const plan =
+      request
 
-await this.planner.plan(
-    request
-);
+    );
 
-const expanded =
+  const plan =
 
-await this.reasoner.reason(
+    await this.planner.plan(
 
-    plan,
+      request
 
-    collected
+    );
 
-);
-const synthesized =
+  const expanded =
 
-await this.synthesizer.synthesize(
+    await this.reasoner.reason(
 
-    expanded
+      plan,
 
-);
+      collected
 
-return this.generator.generate(
+    );
 
-  synthesized,
+  const synthesized =
 
-  // synthesized.comparison
+    await this.synthesizer.synthesize(
 
-);
+      expanded
 
-  }
+    );
+
+  const result =
+
+  await this.generator.generate(
+
+    synthesized
+
+  );
+
+  /*
+   * Internal explanation pipeline.
+   * It is intentionally built now,
+   * even though ReasoningResult
+   * does not expose it yet.
+   */
+
+  const explanation =
+
+    buildAnswerExplanation(
+
+      result.answer,
+
+      synthesized.evidence
+
+    );
+
+  const trace =
+
+    buildReasoningTrace(
+
+      request.query,
+
+      [],
+
+      synthesized.evidence.length,
+
+      0,
+
+      result.confidence
+
+    );
+
+  buildExplanationPipeline(
+
+    explanation,
+
+    trace
+
+  );
+
+  return result;
+
+}
 
 }
