@@ -13,6 +13,13 @@ import type {
 } from "neo4j-driver";
 
 
+import { Neo4jNodeMapper }
+from "../mappers/neo4j-node.mapper.js";
+
+import { Neo4jRelationshipMapper }
+from "../mappers/neo4j-relationship.mapper.js";
+
+
 import { groupEntitiesByType } from "../utils/group-entities.js";
 import { groupRelationshipsByType } from "../utils/group-relationships.js";
 
@@ -242,7 +249,11 @@ const groupedRelationships =
     return null;
   }
 
-  return result.records[0].get("n").properties;
+  // return result.records[0].get("n").properties;
+
+  return Neo4jNodeMapper.toKnowledgeEntity(
+  result.records[0].get("n")
+);
 
 }
 
@@ -257,10 +268,16 @@ async findNodesByType(type: string) {
     { type }
   );
 
-  return result.records.map(record => ({
-    labels: record.get("n").labels,
-    properties: record.get("n").properties
-  }));
+  // return result.records.map(record => ({
+  //   labels: record.get("n").labels,
+  //   properties: record.get("n").properties
+  // }));
+
+  return result.records.map(record =>
+  Neo4jNodeMapper.toKnowledgeEntity(
+    record.get("n")
+  )
+);
 
 }
 
@@ -288,17 +305,44 @@ async findNeighbors(id: string) {
 async findRelationships(id: string) {
 
   const result = await this.executeRead(
+    // `
+    // MATCH (n { id: $id })-[r]-()
+    // RETURN r
+    // `
     `
-    MATCH (n { id: $id })-[r]-()
-    RETURN r
-    `,
+    MATCH (n { id: $id })-[r]-(m)
+
+RETURN
+
+r,
+
+startNode(r).id AS from,
+
+endNode(r).id AS to
+    `
+    ,
     { id }
   );
 
-  return result.records.map(record => ({
-    type: record.get("r").type,
-    properties: record.get("r").properties
-  }));
+  // return result.records.map(record => ({
+  //   type: record.get("r").type,
+  //   properties: record.get("r").properties
+  // }));
+
+  return result.records.map(record =>
+
+  Neo4jRelationshipMapper
+    .toKnowledgeRelationship(
+
+      record.get("r"),
+
+      record.get("from"),
+
+      record.get("to")
+
+    )
+
+);
 
 }
 

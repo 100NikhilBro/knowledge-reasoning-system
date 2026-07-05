@@ -61,27 +61,67 @@ async findNeighbors(
   const graphId = buildGraphId(label, id);
 
   const result = await this.repository.executeRead(
+    // `
+    // MATCH (n:${label} { id: $id })-[r]-(neighbor)
+
+    // RETURN
+    //   type(r) AS relationship,
+    //   neighbor
+    // `
+
     `
     MATCH (n:${label} { id: $id })-[r]-(neighbor)
 
-    RETURN
-      type(r) AS relationship,
-      neighbor
-    `,
+RETURN
+  r,
+  neighbor
+    `
+    
+    ,
     {
       id: graphId
     }
   );
 
-  return result.records.map(record => ({
+//   return result.records.map(record => ({
 
-    relationship: record.get("relationship"),
+//     relationship: record.get("relationship"),
 
-    labels: record.get("neighbor").labels,
+//     labels: record.get("neighbor").labels,
 
-    properties: record.get("neighbor").properties
+//     properties: record.get("neighbor").properties
 
-  }));
+//   }));
+
+
+return result.records.map(record => {
+
+  const neighbor =
+    Neo4jNodeMapper.toKnowledgeEntity(
+      record.get("neighbor")
+    );
+
+  const relationship =
+    Neo4jRelationshipMapper.toKnowledgeRelationship(
+
+      record.get("r"),
+
+      graphId,
+
+      neighbor.id
+
+    );
+
+  return {
+
+    relationship,
+
+    neighbor
+
+  };
+
+});
+
 
 }
 
@@ -94,19 +134,38 @@ async findRelationships(
   const graphId = buildGraphId(label, id);
 
   const result = await this.repository.executeRead(
-    `
-    MATCH (n:${label} { id: $id })-[r]-()
+    // `
+    // MATCH (n:${label} { id: $id })-[r]-()
 
-    RETURN r
-    `,
+    // RETURN r
+    // `
+
+    `MATCH (n:${label} { id: $id })-[r]-(m)
+
+RETURN
+  r,
+  startNode(r).id AS from,
+  endNode(r).id AS to
+    
+    `
+    ,
     {
       id: graphId
     }
   );
 
-  return result.records.map(record => Neo4jRelationshipMapper.toRelationship(
-        record.get("r")
-    ));
+//   return result.records.map(record => Neo4jRelationshipMapper.toRelationship(
+//         record.get("r")
+//     ));
+
+
+return result.records.map(record =>
+  Neo4jRelationshipMapper.toKnowledgeRelationship(
+    record.get("r"),
+    record.get("from"),
+    record.get("to")
+  )
+);
 
 }
 
@@ -171,17 +230,27 @@ async findSubgraph(
     nodes.set(node.id, node);
     nodes.set(neighbor.id, neighbor);
 
-    relationships.push({
+    // relationships.push({
 
-      from: node.id,
+    //   from: node.id,
 
-      to: neighbor.id,
+    //   to: neighbor.id,
 
-      ...Neo4jRelationshipMapper.toRelationship(
-        record.get("r")
-      )
+    //   ...Neo4jRelationshipMapper.toRelationship(
+    //     record.get("r")
+    //   )
 
-    });
+    // });
+
+    relationships.push(
+
+  Neo4jRelationshipMapper.toKnowledgeRelationship(
+    record.get("r"),
+    node.id,
+    neighbor.id
+  )
+
+);
 
   }
 
@@ -241,21 +310,40 @@ for (const node of nodes) {
 
 }
 
-const relationships = path.segments.map((segment: any) => ({
+// const relationships = path.segments.map((segment: any) => ({
 
-  from: Neo4jNodeMapper.toKnowledgeEntity(
-    segment.start
-  ).id,
+//   from: Neo4jNodeMapper.toKnowledgeEntity(
+//     segment.start
+//   ).id,
 
-  to: Neo4jNodeMapper.toKnowledgeEntity(
-    segment.end
-  ).id,
+//   to: Neo4jNodeMapper.toKnowledgeEntity(
+//     segment.end
+//   ).id,
 
-  ...Neo4jRelationshipMapper.toRelationship(
-    segment.relationship
+//   ...Neo4jRelationshipMapper.toRelationship(
+//     segment.relationship
+//   )
+
+// }));
+
+
+const relationships = path.segments.map((segment: any) =>
+
+  Neo4jRelationshipMapper.toKnowledgeRelationship(
+
+    segment.relationship,
+
+    Neo4jNodeMapper.toKnowledgeEntity(
+      segment.start
+    ).id,
+
+    Neo4jNodeMapper.toKnowledgeEntity(
+      segment.end
+    ).id
+
   )
 
-}));
+);
 
 return {
 

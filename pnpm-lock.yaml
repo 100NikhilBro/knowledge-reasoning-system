@@ -121,6 +121,28 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(@types/node@26.1.0)(vite@8.1.3(@types/node@26.1.0)(esbuild@0.28.1)(tsx@4.23.0))
 
+  packages/retrieval:
+    dependencies:
+      '@knowledge/graph':
+        specifier: workspace:*
+        version: link:../knowledge-graph
+      '@knowledge/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.0
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@26.1.0)(vite@8.1.3(@types/node@26.1.0)(esbuild@0.28.1)(tsx@4.23.0))
+
   packages/shared:
     devDependencies:
       '@types/node':
