@@ -1,0 +1,17 @@
+import type { Citation }
+from "./citation.js";
+
+import type { ReasoningTrace }
+from "./reasoning-trace.js";
+
+export interface ReasoningResult {
+
+  answer: string;
+
+  confidence: number;
+
+  citations: Citation[];
+
+  trace: ReasoningTrace;
+
+}

@@ -1,23 +1,31 @@
-// export interface RetrievalResult<T> {
+// // export interface RetrievalResult<T> {
 
-//   items: T[];
+// //   items: T[];
 
-//   total: number;
+// //   total: number;
+
+// // }
+
+
+
+
+
+// import type { KnowledgeEntity } from "@knowledge/shared";
+
+// export interface RetrievalResult {
+
+//   entity: KnowledgeEntity;
+
+//   score: number;
+
+//   source: "graph" | "vector";
+
+//   metadata?: Record<string, unknown>;
 
 // }
 
 
 
-import type { KnowledgeEntity } from "@knowledge/shared";
-
-export interface RetrievalResult {
-
-  entity: KnowledgeEntity;
-
-  score: number;
-
-  source: "graph" | "vector";
-
-  metadata?: Record<string, unknown>;
-
-}
+export type {
+  RetrievalResult
+} from "@knowledge/shared";
