@@ -12,6 +12,18 @@ import type {
 
 import { GraphRetriever } from "../contracts/retriever.js";
 
+
+import type {
+  RetrievalQuery
+} from "../types/retrieval-query.js";
+
+import type {
+  RetrievalResult
+} from "../types/retrieval-result.js";
+
+import { calculateScore }
+from "../ranking/score.js";
+
 export class Neo4jGraphRetriever
   implements GraphRetriever {
 
@@ -19,6 +31,35 @@ export class Neo4jGraphRetriever
     private readonly graph =
       new GraphTraversalService()
   ) {}
+
+
+  async retrieve(
+  query: RetrievalQuery
+): Promise<RetrievalResult[]> {
+
+  const node = await this.findNode(
+    query.query
+  );
+
+  if (!node) {
+    return [];
+  }
+
+  return [
+
+    {
+
+      entity: node,
+
+      score: calculateScore(node),
+
+      source: "graph"
+
+    }
+
+  ];
+
+}
 
   async findNode(
     id: string

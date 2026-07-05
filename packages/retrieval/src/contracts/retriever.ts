@@ -6,7 +6,16 @@ import type {
   GraphSubgraph
 } from "@knowledge/shared";
 
+import type { RetrievalQuery } from "../types/retrieval-query.js";
+import type { RetrievalResult } from "../types/retrieval-result.js";
+
+
+
 export interface GraphRetriever {
+
+  retrieve(
+  query: RetrievalQuery
+): Promise<RetrievalResult[]>;
 
   findNode(
     id: string
@@ -28,5 +37,8 @@ export interface GraphRetriever {
     from: string,
     to: string
   ): Promise<GraphPath | null>;
+
+
+
 
 }
