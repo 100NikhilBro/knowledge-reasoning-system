@@ -1,4 +1,12 @@
 import type {
+  MemoryState
+} from "@knowledge/working-memory";
+
+import type {
+  SessionStateStore
+} from "../contracts/session-state-store.js";
+
+import type {
   ReasoningRequest,
   ReasoningResult
 } from "@knowledge/shared";
@@ -27,26 +35,17 @@ import {
   DefaultAnswerGenerator
 } from "./answer-generator.service.js";
 
-
-
 import {
-
   buildAnswerExplanation
-
 } from "../utils/build-answer-explanation.js";
 
 import {
-
   buildReasoningTrace
-
 } from "../utils/build-reasoning-trace.js";
 
 import {
-
   buildExplanationPipeline
-
 } from "../utils/build-explanation-pipeline.js";
-
 
 
 export class DefaultReasoningEngine
@@ -67,101 +66,312 @@ implements ReasoningEngine {
       new DefaultEvidenceSynthesizer(),
 
     private readonly generator =
-      new DefaultAnswerGenerator()
+      new DefaultAnswerGenerator(),
+
+    private readonly sessionStateStore?: SessionStateStore
 
   ) {}
 
-async reason(
 
-  request: ReasoningRequest
+  async reason(
 
-): Promise<ReasoningResult> {
+    request: ReasoningRequest
 
-  const collected =
+  ): Promise<ReasoningResult> {
 
-    await this.collector.collect(
+    /*
+     * Load previous session history.
+     *
+     * For a new session, history starts empty.
+     */
 
-      request
+    let history: MemoryState[] = [];
 
-    );
 
-  const plan =
+    if (
+      request.sessionId &&
+      this.sessionStateStore
+    ) {
 
-    await this.planner.plan(
+      const previousState =
+        await this.sessionStateStore.load(
+          request.sessionId
+        );
 
-      request
 
-    );
+      if (previousState) {
 
-  const expanded =
+        history = [
+          ...previousState.history
+        ];
 
-    await this.reasoner.reason(
+      }
 
-      plan,
 
-      collected
+      /*
+       * Persist the active state before
+       * starting the reasoning pipeline.
+       */
 
-    );
+      await this.sessionStateStore.save(
 
-  const synthesized =
+        request.sessionId,
 
-    await this.synthesizer.synthesize(
+        {
 
-      expanded
+          sessionId:
+            request.sessionId,
 
-    );
+          memory: {
 
-  const result =
+            query:
+              request.query,
 
-  await this.generator.generate(
+            status:
+              "active"
 
-    synthesized
+          },
 
-  );
+          history
 
-  /*
-   * Internal explanation pipeline.
-   * It is intentionally built now,
-   * even though ReasoningResult
-   * does not expose it yet.
-   */
+        }
 
-  const explanation =
+      );
 
-    buildAnswerExplanation(
+    }
 
-      result.answer,
 
-      synthesized.evidence
+    try {
 
-    );
+      /*
+       * Step 1
+       * Collect evidence
+       */
 
-  const trace =
+      const collected =
+        await this.collector.collect(
 
-    buildReasoningTrace(
+          request
 
-      request.query,
+        );
 
-      [],
 
-      synthesized.evidence.length,
+      /*
+       * Step 2
+       * Build reasoning plan
+       */
 
-      0,
+      const plan =
+        await this.planner.plan(
 
-      result.confidence
+          request
 
-    );
+        );
 
-  buildExplanationPipeline(
 
-    explanation,
+      /*
+       * Step 3
+       * Perform graph reasoning
+       */
 
-    trace
+      const expanded =
+        await this.reasoner.reason(
 
-  );
+          plan,
 
-  return result;
+          collected
 
-}
+        );
+
+
+      /*
+       * Step 4
+       * Synthesize evidence
+       */
+
+      const synthesized =
+        await this.synthesizer.synthesize(
+
+          expanded
+
+        );
+
+
+      /*
+       * Step 5
+       * Generate final answer
+       */
+
+      const result =
+        await this.generator.generate(
+
+          synthesized
+
+        );
+
+
+      /*
+       * Internal explanation pipeline.
+       *
+       * The explanation and trace are currently
+       * built internally and are not exposed
+       * directly through ReasoningResult.
+       */
+
+      const explanation =
+        buildAnswerExplanation(
+
+          result.answer,
+
+          synthesized.evidence
+
+        );
+
+
+      const trace =
+        buildReasoningTrace(
+
+          request.query,
+
+          [],
+
+          synthesized.evidence.length,
+
+          0,
+
+          result.confidence
+
+        );
+
+
+      buildExplanationPipeline(
+
+        explanation,
+
+        trace
+
+      );
+
+
+      /*
+       * Persist completed session state.
+       */
+
+      if (
+        request.sessionId &&
+        this.sessionStateStore
+      ) {
+
+        const updatedHistory: MemoryState[] = [
+
+          ...history,
+
+          {
+
+            query:
+              request.query,
+
+            status:
+              "completed"
+
+          }
+
+        ];
+
+
+        await this.sessionStateStore.save(
+
+          request.sessionId,
+
+          {
+
+            sessionId:
+              request.sessionId,
+
+            memory: {
+
+              query:
+                request.query,
+
+              status:
+                "completed"
+
+            },
+
+            history:
+              updatedHistory
+
+          }
+
+        );
+
+      }
+
+
+      return result;
+
+
+    } catch (error) {
+
+      /*
+       * Persist failed session state.
+       */
+
+      if (
+        request.sessionId &&
+        this.sessionStateStore
+      ) {
+
+        const updatedHistory: MemoryState[] = [
+
+          ...history,
+
+          {
+
+            query:
+              request.query,
+
+            status:
+              "failed"
+
+          }
+
+        ];
+
+
+        await this.sessionStateStore.save(
+
+          request.sessionId,
+
+          {
+
+            sessionId:
+              request.sessionId,
+
+            memory: {
+
+              query:
+                request.query,
+
+              status:
+                "failed"
+
+            },
+
+            history:
+              updatedHistory
+
+          }
+
+        );
+
+      }
+
+
+      throw error;
+
+    }
+
+  }
 
 }

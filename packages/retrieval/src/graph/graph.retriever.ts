@@ -10,8 +10,9 @@ import type {
   GraphPath
 } from "@knowledge/shared";
 
-import { GraphRetriever } from "../contracts/retriever.js";
-
+import {
+  GraphRetriever
+} from "../contracts/retriever.js";
 
 import type {
   RetrievalQuery
@@ -21,11 +22,13 @@ import type {
   RetrievalResult
 } from "../types/retrieval-result.js";
 
-import { calculateScore }
-from "../ranking/score.js";
+import {
+  calculateScore
+} from "../ranking/score.js";
+
 
 export class Neo4jGraphRetriever
-  implements GraphRetriever {
+implements GraphRetriever {
 
   constructor(
     private readonly graph =
@@ -34,76 +37,348 @@ export class Neo4jGraphRetriever
 
 
   async retrieve(
-  query: RetrievalQuery
-): Promise<RetrievalResult[]> {
+    query: RetrievalQuery
+  ): Promise<RetrievalResult[]> {
 
-  const node = await this.findNode(
-    query.query
-  );
+    const candidates =
+      await this.findCandidates(
+        query.query
+      );
 
-  if (!node) {
-    return [];
-  }
 
-  return [
+    const results =
+      candidates.map(
+        entity => ({
 
-    {
+          entity,
 
-      entity: node,
+          score:
+            this.calculateRelevance(
+              query.query,
+              entity
+            ),
 
-      score: calculateScore(node),
+          source:
+            "graph" as const
 
-      source: "graph"
+        })
+      );
 
-    }
 
-  ];
+    results.sort(
+      (a, b) =>
+        b.score - a.score
+    );
 
-}
 
-  async findNode(
-    id: string
-  ): Promise<KnowledgeEntity | null> {
-
-    return this.graph.findNodeById(
-      "Proposal",
-      id
+    return results.slice(
+      0,
+      query.topK
     );
 
   }
+
+
+  async findCandidates(
+    query: string
+  ): Promise<KnowledgeEntity[]> {
+
+    const labels = [
+
+      "Proposal",
+
+      "Feature",
+
+      "Author",
+
+      "Concern"
+
+    ];
+
+
+    const groups =
+      await Promise.all(
+
+        labels.map(
+          label =>
+            this.graph.findNodesByLabel(
+              label
+            )
+        )
+
+      );
+
+
+    const entities =
+      groups.flat();
+
+
+    const normalizedQuery =
+      this.normalize(query);
+
+
+    const queryTokens =
+      this.tokenize(
+        normalizedQuery
+      );
+
+
+    return entities.filter(
+      entity => {
+
+        const searchableText =
+          this.buildSearchableText(
+            entity
+          );
+
+
+        return queryTokens.some(
+          token =>
+            searchableText.includes(
+              token
+            )
+        );
+
+      }
+    );
+
+  }
+
+
+  private buildSearchableText(
+    entity: KnowledgeEntity
+  ): string {
+
+    const values = [
+
+      entity.id,
+
+      entity.label,
+
+      entity.source,
+
+      ...Object.values(
+        entity.properties ?? {}
+      )
+
+    ];
+
+
+    return this.normalize(
+      values
+        .filter(
+          value =>
+            typeof value === "string" ||
+            typeof value === "number"
+        )
+        .join(" ")
+    );
+
+  }
+
+
+  private tokenize(
+    value: string
+  ): string[] {
+
+    return value
+      .split(/\s+/)
+      .map(
+        token =>
+          token.replace(
+            /[^\w-]/g,
+            ""
+          )
+      )
+      .filter(
+        token =>
+          token.length > 1
+      );
+
+  }
+
+
+  private normalize(
+    value: string
+  ): string {
+
+    return value
+      .trim()
+      .toLowerCase();
+
+  }
+
+
+  private calculateRelevance(
+    query: string,
+    entity: KnowledgeEntity
+  ): number {
+
+    const queryText =
+      this.normalize(query);
+
+
+    const searchableText =
+      this.buildSearchableText(
+        entity
+      );
+
+
+    let score =
+      calculateScore(entity);
+
+
+    /*
+     * Exact label match
+     */
+
+    if (
+      queryText.includes(
+        this.normalize(
+          entity.label
+        )
+      )
+    ) {
+
+      score += 10;
+
+    }
+
+
+    /*
+     * Exact entity id match
+     */
+
+    if (
+      queryText.includes(
+        this.normalize(
+          entity.id
+        )
+      )
+    ) {
+
+      score += 15;
+
+    }
+
+
+    /*
+     * Token overlap
+     */
+
+    const queryTokens =
+      this.tokenize(
+        queryText
+      );
+
+
+    const matchedTokens =
+      queryTokens.filter(
+        token =>
+          searchableText.includes(
+            token
+          )
+      );
+
+
+    score +=
+      matchedTokens.length;
+
+
+    return score;
+
+  }
+
+
+  async findNode(
+    query: string
+  ): Promise<KnowledgeEntity | null> {
+
+    const candidates =
+      await this.findCandidates(
+        query
+      );
+
+
+    if (
+      candidates.length === 0
+    ) {
+
+      return null;
+
+    }
+
+
+    const ranked =
+      candidates
+        .map(
+          entity => ({
+
+            entity,
+
+            score:
+              this.calculateRelevance(
+                query,
+                entity
+              )
+
+          })
+        )
+        .sort(
+          (a, b) =>
+            b.score - a.score
+        );
+
+
+    return ranked[0].entity;
+
+  }
+
 
   async findNeighbors(
     id: string
   ): Promise<GraphNeighbor[]> {
 
     return this.graph.findNeighbors(
+
       "Proposal",
+
       id
+
     );
 
   }
+
 
   async findRelationships(
     id: string
   ): Promise<KnowledgeRelationship[]> {
 
     return this.graph.findRelationships(
+
       "Proposal",
+
       id
+
     );
 
   }
+
 
   async findSubgraph(
     id: string
   ): Promise<GraphSubgraph> {
 
     return this.graph.findSubgraph(
+
       "Proposal",
+
       id
+
     );
 
   }
+
 
   async findShortestPath(
     from: string,
@@ -111,10 +386,15 @@ export class Neo4jGraphRetriever
   ): Promise<GraphPath | null> {
 
     return this.graph.findShortestPath(
+
       "Proposal",
+
       from,
+
       "Author",
+
       to
+
     );
 
   }

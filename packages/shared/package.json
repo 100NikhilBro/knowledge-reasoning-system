@@ -4,14 +4,21 @@
   "private": true,
   "type": "module",
   "description": "Shared types and utilities",
-  "main": "dist/index.js",
-"types": "dist/index.d.ts",
+
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
+
   "scripts": {
     "build": "tsc"
   },
+
   "devDependencies": {
     "@types/node": "^26.1.0",
     "typescript": "^6.0.3"

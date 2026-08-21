@@ -20,6 +20,86 @@ export class GraphTraversalRepository {
     private readonly repository = new GraphRepository()
   ) {}
 
+// // async findNodeById(
+// //   label: string,
+// //   id: string
+// // ): Promise<KnowledgeEntity | null> {
+
+// //   const graphId = buildGraphId(
+// //     label,
+// //     id
+// //   );
+
+// //   const result = await this.repository.executeRead(
+// //     `
+// //     MATCH (n:${label} { id: $id })
+
+// //     RETURN n
+// //     `,
+// //     {
+// //       id: graphId
+// //     }
+// //   );
+
+// //   if (result.records.length === 0) {
+// //     return null;
+// //   }
+
+// //   const node = result.records[0].get("n");
+
+// // return Neo4jNodeMapper.toKnowledgeEntity(node);
+
+// // }
+
+
+
+// async findNodeById(
+//   label: string,
+//   id: string
+// ): Promise<KnowledgeEntity | null> {
+
+//   const graphId = buildGraphId(
+//     label,
+//     id
+//   );
+
+//   console.log("GRAPH LOOKUP:", {
+//     label,
+//     id,
+//     graphId
+//   });
+
+//   const result = await this.repository.executeRead(
+//     `
+//     MATCH (n:${label} { id: $id })
+
+//     RETURN n
+//     `,
+//     {
+//       id: graphId
+//     }
+//   );
+
+//   console.log(
+//     "GRAPH RECORD COUNT:",
+//     result.records.length
+//   );
+
+//   if (result.records.length === 0) {
+//     return null;
+//   }
+
+//   const node =
+//     result.records[0].get("n");
+
+//   return Neo4jNodeMapper.toKnowledgeEntity(
+//     node
+//   );
+
+// }
+
+
+
 async findNodeById(
   label: string,
   id: string
@@ -45,12 +125,14 @@ async findNodeById(
     return null;
   }
 
-  const node = result.records[0].get("n");
+  const node =
+    result.records[0].get("n");
 
-return Neo4jNodeMapper.toKnowledgeEntity(node);
+  return Neo4jNodeMapper.toKnowledgeEntity(
+    node
+  );
 
 }
-
 
 
 async findNeighbors(

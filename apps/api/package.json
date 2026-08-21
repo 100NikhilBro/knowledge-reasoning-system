@@ -10,8 +10,10 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-  "@knowledge/shared": "workspace:*",
-  "express": "^5.x"
+    "@knowledge/shared": "workspace:*",
+    "@knowledge/reasoning": "workspace:*",
+    "@knowledge/working-memory": "workspace:*",
+    "express": "^5.x"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

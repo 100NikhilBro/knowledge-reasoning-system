@@ -1,7 +1,21 @@
+// // import type { ReasoningPipeline } from "./reasoning-pipeline.js";
+// // import type { PipelineStatistics } from "./pipeline-statistics.js";
+
+// // export interface ReasoningResult {
+
+// //   pipeline: ReasoningPipeline;
+
+// //   statistics: PipelineStatistics;
+
+// // }
+
+
 // import type { ReasoningPipeline } from "./reasoning-pipeline.js";
 // import type { PipelineStatistics } from "./pipeline-statistics.js";
 
 // export interface ReasoningResult {
+
+//   answer: string;
 
 //   pipeline: ReasoningPipeline;
 
@@ -10,8 +24,11 @@
 // }
 
 
-import type { ReasoningPipeline } from "./reasoning-pipeline.js";
-import type { PipelineStatistics } from "./pipeline-statistics.js";
+import type { ReasoningPipeline }
+  from "./reasoning-pipeline.js";
+
+import type { PipelineStatistics }
+  from "./pipeline-statistics.js";
 
 export interface ReasoningResult {
 
@@ -20,5 +37,7 @@ export interface ReasoningResult {
   pipeline: ReasoningPipeline;
 
   statistics: PipelineStatistics;
+
+  sessionId?: string;
 
 }

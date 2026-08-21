@@ -12,5 +12,8 @@
     "build": "echo \"Nothing to build yet\"",
     "lint": "echo \"Lint not configured\"",
     "format": "echo \"Format not configured\""
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0"
   }
 }

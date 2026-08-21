@@ -18,7 +18,11 @@ export const DEFAULT_VERIFICATION_RULES: VerificationRules = {
 
     "Organization",
 
-    "Concept"
+    "Concept",
+
+    "Feature",
+
+    "Concern"
 
   ]
 
