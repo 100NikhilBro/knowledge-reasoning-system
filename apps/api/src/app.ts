@@ -147,7 +147,7 @@ export function createApp(
 
   /*
    * Global boundary order:
-   * security headers → request id → request logging → JSON body
+   * security headers → request id → request logging → JSON
    */
   app.use(
     createSecurityHeadersMiddleware()
@@ -164,6 +164,62 @@ export function createApp(
   app.use(
     express.json()
   );
+
+
+  /*
+   * CORS:
+   * allow the deployed Web UI to call the API.
+   *
+   * Preflight requests must be handled before the protected
+   * /reason route so OPTIONS does not require API authentication.
+   */
+  app.use((req, res, next) => {
+
+    const origin =
+      req.headers.origin;
+
+    const allowedOrigin =
+      process.env.WEB_ORIGIN;
+
+    if (
+      origin &&
+      allowedOrigin &&
+      origin === allowedOrigin
+    ) {
+
+      res.header(
+        "Access-Control-Allow-Origin",
+        origin
+      );
+
+      res.header(
+        "Vary",
+        "Origin"
+      );
+
+      res.header(
+        "Access-Control-Allow-Methods",
+        "GET,POST,OPTIONS"
+      );
+
+      res.header(
+        "Access-Control-Allow-Headers",
+        "Content-Type, x-api-key"
+      );
+
+    }
+
+    if (
+      req.method === "OPTIONS"
+    ) {
+
+      return res.sendStatus(204);
+
+    }
+
+    next();
+
+  });
 
 
   app.get(
