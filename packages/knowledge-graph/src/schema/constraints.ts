@@ -22,6 +22,18 @@ export const CONSTRAINTS = [
   CREATE CONSTRAINT concern_id IF NOT EXISTS
   FOR (n:Concern)
   REQUIRE n.id IS UNIQUE
+  `,
+
+  `
+  CREATE CONSTRAINT decision_id IF NOT EXISTS
+  FOR (n:Decision)
+  REQUIRE n.id IS UNIQUE
+  `,
+
+  `
+  CREATE CONSTRAINT python_version_id IF NOT EXISTS
+  FOR (n:PythonVersion)
+  REQUIRE n.id IS UNIQUE
   `
 
 ];

@@ -37,6 +37,10 @@ describe(
           plan.strategy
         ).toBe("single-hop");
 
+        expect(
+          plan.focusRelationships
+        ).toEqual(["PROPOSED_BY"]);
+
       }
 
     );
@@ -87,7 +91,7 @@ describe(
 
     it(
 
-      "should detect multi hop",
+      "should detect multi hop when and/both has no relationship focus",
 
       async () => {
 
@@ -95,13 +99,69 @@ describe(
           await planner.plan({
 
             query:
-              "Which proposal introduced typing and was proposed by Guido?"
+              "How do PEP-484 and its related entities connect through multiple hops?"
 
           });
 
         expect(
           plan.strategy
         ).toBe("multi-hop");
+
+        expect(
+          plan.focusRelationships
+        ).toBeUndefined();
+
+      }
+
+    );
+
+    it(
+
+      "keeps compound focused relationship questions on single-hop",
+
+      async () => {
+
+        const plan =
+          await planner.plan({
+
+            query:
+              "Who proposed PEP-484, what feature did it introduce, what concern did it address, and what decision resulted from it?"
+
+          });
+
+        expect(plan.strategy).toBe("single-hop");
+
+        expect(plan.focusRelationships).toEqual([
+          "PROPOSED_BY",
+          "ADDRESSES",
+          "INTRODUCES",
+          "RESULTS_IN"
+        ]);
+
+      }
+
+    );
+
+    it(
+
+      "plans RESULTS_IN and IMPLEMENTED_IN without multi-hop dump for decision+version questions",
+
+      async () => {
+
+        const plan =
+          await planner.plan({
+
+            query:
+              "What decision resulted from PEP-484 and which Python version implemented it?"
+
+          });
+
+        expect(plan.strategy).toBe("single-hop");
+
+        expect(plan.focusRelationships).toEqual([
+          "RESULTS_IN",
+          "IMPLEMENTED_IN"
+        ]);
 
       }
 

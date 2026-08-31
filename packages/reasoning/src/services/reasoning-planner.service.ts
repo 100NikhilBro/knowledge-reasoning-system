@@ -8,7 +8,13 @@ import type {
   ReasoningPlanner
 } from "../contracts/reasoning-planner.js";
 
+import {
+  detectFocusRelationships
+} from "../utils/detect-focus-relationships.js";
 
+import {
+  detectRelationshipBetweenQuery
+} from "../utils/detect-relationship-between-query.js";
 
 export class DefaultReasoningPlanner
 implements ReasoningPlanner {
@@ -22,10 +28,30 @@ implements ReasoningPlanner {
     const query =
       request.query.toLowerCase();
 
+    const relationshipBetween =
+      detectRelationshipBetweenQuery(
+        request.query
+      );
+
+    const focusRelationships =
+      detectFocusRelationships(
+        request.query
+      );
+
     let strategy: ReasoningStrategy =
       "single-hop";
 
-    if (query.includes("compare")) {
+    /*
+     * Relationship-between queries must NOT fall through to multi-hop via
+     * the generic " and " heuristic — that expands unrelated neighbors.
+     */
+    if (relationshipBetween) {
+
+      strategy = "single-hop";
+
+    }
+
+    else if (query.includes("compare")) {
 
       strategy = "comparison";
 
@@ -37,36 +63,64 @@ implements ReasoningPlanner {
 
     }
 
+    /*
+     * Compound questions that already name focused relationship types must
+     * stay on single-hop so focusRelationships is applied. The generic
+     * " and " / "both" heuristic otherwise selects multi-hop, which ignores
+     * focus and BFS-dumps neighbors (breaking RESULTS_IN / PROPOSED_BY etc.).
+     */
     else if (
-      query.includes(" and ") ||
-      query.includes("both")
+      (
+        query.includes(" and ") ||
+        query.includes("both")
+      ) &&
+      !(
+        focusRelationships &&
+        focusRelationships.length > 0
+      )
     ) {
 
       strategy = "multi-hop";
 
     }
 
-    return {
+    const plan: ReasoningPlan = {
 
-  strategy,
+      strategy,
 
-  traversal:
+      traversal:
 
-    strategy === "multi-hop"
+        strategy === "multi-hop"
 
-      ? "bfs"
+          ? "bfs"
 
-      : "dfs",
+          : "dfs",
 
-  maxDepth:
+      maxDepth:
 
-    strategy === "multi-hop"
+        strategy === "multi-hop"
 
-      ? 3
+          ? 3
 
-      : 1
+          : 1
 
-};
+    };
+
+    if (focusRelationships) {
+
+      plan.focusRelationships =
+        focusRelationships;
+
+    }
+
+    if (relationshipBetween) {
+
+      plan.requireRelationshipBetween =
+        relationshipBetween;
+
+    }
+
+    return plan;
 
   }
 

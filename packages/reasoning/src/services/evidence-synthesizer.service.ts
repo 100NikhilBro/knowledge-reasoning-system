@@ -253,7 +253,10 @@ filterEvidence(
 
     return {
 
-      evidence: sorted
+      evidence: sorted,
+
+      comparison:
+        evidence.comparison
 
     };
 

@@ -1,0 +1,31 @@
+{
+  "name": "@knowledge/web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Knowledge Reasoning System web UI",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest --run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@rollup/wasm-node": "^4.63.1",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "jsdom": "^26.1.0",
+    "typescript": "^6.0.3",
+    "vite": "^7.1.5",
+    "vitest": "^4.1.9"
+  }
+}

@@ -1,12 +1,15 @@
 import type {
-  EvidenceSet,
   ReasoningResult
 } from "@knowledge/shared";
+
+import type {
+  ReasoningContext
+} from "../types/reasoning-context.js";
 
 export interface AnswerGenerator {
 
   generate(
-    evidence: EvidenceSet
+    context: ReasoningContext
   ): Promise<ReasoningResult>;
 
 }

@@ -4,6 +4,9 @@ from "./citation.js";
 import type { ReasoningTrace }
 from "./reasoning-trace.js";
 
+import type { AnswerExplanation }
+from "./answer-explanation.js";
+
 export interface ReasoningResult {
 
   answer: string;
@@ -15,5 +18,7 @@ export interface ReasoningResult {
   trace: ReasoningTrace;
 
   comparison?: string;
+
+  explanation?: AnswerExplanation;
 
 }

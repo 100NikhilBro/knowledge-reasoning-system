@@ -3,19 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-
-
   "main": "./dist/index.js",
-"types": "./dist/index.d.ts",
-
-"exports": {
-  ".": {
-    "types": "./dist/index.d.ts",
-    "import": "./dist/index.js"
-  }
-},
-
-
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc",
@@ -23,7 +18,9 @@
   },
   "dependencies": {
     "@knowledge/shared": "workspace:*",
-    "@knowledge/graph": "workspace:*"
+    "@knowledge/graph": "workspace:*",
+    "@knowledge/embeddings": "workspace:*",
+    "@knowledge/vector-store": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

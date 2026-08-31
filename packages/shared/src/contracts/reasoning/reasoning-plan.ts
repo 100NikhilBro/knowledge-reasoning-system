@@ -40,4 +40,19 @@ export interface ReasoningPlan {
 
   maxDepth: number;
 
+  /**
+   * When set, single-hop reasoning expands only these relationship types
+   * and keeps their endpoints — avoiding unrelated neighbor noise.
+   */
+  focusRelationships?: string[];
+
+  /**
+   * When set, single-hop must ground an edge connecting both phrases.
+   * If no such edge exists, evidence is emptied (fail closed).
+   */
+  requireRelationshipBetween?: {
+    left: string;
+    right: string;
+  };
+
 }

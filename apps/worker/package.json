@@ -4,18 +4,27 @@
   "private": true,
   "type": "module",
   "description": "Knowledge ingestion worker",
+  "main": "./dist/worker.js",
   "scripts": {
     "dev": "tsx watch src/worker.ts",
+    "produce": "tsx src/produce.ts",
     "build": "tsc",
-    "start": "node dist/worker.js"
+    "start": "node dist/worker.js",
+    "test": "vitest --run"
   },
   "dependencies": {
-  "@knowledge/shared": "workspace:*",
-  "bullmq": "^5.x"
-},
+    "@knowledge/extractor": "workspace:*",
+    "@knowledge/graph": "workspace:*",
+    "@knowledge/parser": "workspace:*",
+    "@knowledge/shared": "workspace:*",
+    "@knowledge/vector-store": "workspace:*",
+    "bullmq": "^5.58.5",
+    "dotenv": "^17.4.2"
+  },
   "devDependencies": {
     "@types/node": "^26.1.0",
     "tsx": "^4.23.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

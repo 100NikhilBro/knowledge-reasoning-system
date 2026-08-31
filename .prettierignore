@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+coverage
+pnpm-lock.yaml
+knowledge_state
+*.tsbuildinfo
+docker-data
+apps/web
+packages/validator
+**/*.js

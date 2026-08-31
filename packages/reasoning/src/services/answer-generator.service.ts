@@ -1,7 +1,10 @@
 import type {
-  EvidenceSet,
   ReasoningResult
 } from "@knowledge/shared";
+
+import type {
+  ReasoningContext
+} from "../types/reasoning-context.js";
 
 import {
   buildTrace
@@ -19,6 +22,10 @@ import {
   DefaultCitationBuilder
 } from "./citation-builder.service.js";
 
+/**
+ * Deterministic / template-based answer generator.
+ * Answers are produced only from the supplied grounded ReasoningContext.
+ */
 export class DefaultAnswerGenerator
 implements AnswerGenerator {
 
@@ -34,33 +41,36 @@ implements AnswerGenerator {
 
   async generate(
 
-    evidence: EvidenceSet,
-
-    // comparison?: string
+    context: ReasoningContext
 
   ): Promise<ReasoningResult> {
 
- const answer =
+    const evidenceSet = {
 
-  evidence.comparison ??
+      evidence:
+        context.evidence,
 
-  evidence.evidence
+      comparison:
+        context.comparison
 
-    .map(
+    };
 
-      item =>
+    const answer =
 
-        `${item.entity.type}: ${item.entity.label}`
+      context.comparison ??
 
-    )
-
-    .join("\n");
+      context.items
+        .map(
+          item =>
+            `${item.entityType}: ${item.label}`
+        )
+        .join("\n");
 
     const confidence =
 
       await this.confidence.calculate(
 
-        evidence
+        evidenceSet
 
       );
 
@@ -68,29 +78,28 @@ implements AnswerGenerator {
 
       await this.citations.build(
 
-        evidence
+        evidenceSet
 
       );
 
     return {
 
-  answer,
+      answer,
 
-  comparison:
+      comparison:
+        context.comparison,
 
-    evidence.comparison,
+      confidence,
 
-  confidence,
+      citations,
 
-  citations,
+      trace: buildTrace(
 
-  trace: buildTrace(
+        evidenceSet
 
-    evidence
+      )
 
-  )
-
-};
+    };
 
   }
 

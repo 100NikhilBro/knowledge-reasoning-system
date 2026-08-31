@@ -149,4 +149,70 @@ describe("GraphRepository", () => {
 
   });
 
+  it("should persist Decision and PythonVersion entities", async () => {
+
+    const spy = vi.spyOn(repository, "executeWrite");
+
+    spy.mockResolvedValue({} as any);
+
+    await repository.createEntity({
+      id: "decision:accepted",
+      type: "Decision",
+      label: "Accepted",
+      source: "pep-484.md",
+      confidence: 1,
+      properties: { outcome: "Accepted" }
+    });
+
+    await repository.createEntity({
+      id: "pythonversion:3.5",
+      type: "PythonVersion",
+      label: "3.5",
+      source: "pep-484.md",
+      confidence: 1,
+      properties: { version: "3.5" }
+    });
+
+    expect(spy).toHaveBeenCalledTimes(2);
+
+    expect(String(spy.mock.calls[0]?.[0] ?? ""))
+      .toContain("Decision");
+
+    expect(String(spy.mock.calls[1]?.[0] ?? ""))
+      .toContain("PythonVersion");
+
+  });
+
+  it("should persist RESULTS_IN and IMPLEMENTED_IN relationships", async () => {
+
+    const spy = vi.spyOn(repository, "executeWrite");
+
+    spy.mockResolvedValue({} as any);
+
+    await repository.createRelationship({
+      from: "proposal:PEP-484",
+      to: "decision:accepted",
+      type: "RESULTS_IN",
+      confidence: 1,
+      properties: {}
+    });
+
+    await repository.createRelationship({
+      from: "decision:accepted",
+      to: "pythonversion:3.5",
+      type: "IMPLEMENTED_IN",
+      confidence: 1,
+      properties: {}
+    });
+
+    expect(spy).toHaveBeenCalledTimes(2);
+
+    expect(String(spy.mock.calls[0]?.[0] ?? ""))
+      .toContain("RESULTS_IN");
+
+    expect(String(spy.mock.calls[1]?.[0] ?? ""))
+      .toContain("IMPLEMENTED_IN");
+
+  });
+
 });

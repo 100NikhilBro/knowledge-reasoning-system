@@ -35,6 +35,26 @@ import {
   DefaultAnswerGenerator
 } from "./answer-generator.service.js";
 
+import type {
+  AnswerGenerator
+} from "../contracts/answer-generator.js";
+
+import {
+  DefaultContextBuilder
+} from "./context-builder.service.js";
+
+import type {
+  ContextBuilder
+} from "../contracts/context-builder.js";
+
+import type {
+  AnswerVerifier
+} from "../contracts/answer-verifier.js";
+
+import {
+  DefaultAnswerVerifier
+} from "./answer-verifier.service.js";
+
 import {
   buildAnswerExplanation
 } from "../utils/build-answer-explanation.js";
@@ -65,10 +85,16 @@ implements ReasoningEngine {
     private readonly synthesizer =
       new DefaultEvidenceSynthesizer(),
 
-    private readonly generator =
+    private readonly generator: AnswerGenerator =
       new DefaultAnswerGenerator(),
 
-    private readonly sessionStateStore?: SessionStateStore
+    private readonly sessionStateStore?: SessionStateStore,
+
+    private readonly contextBuilder: ContextBuilder =
+      new DefaultContextBuilder(),
+
+    private readonly answerVerifier: AnswerVerifier =
+      new DefaultAnswerVerifier()
 
   ) {}
 
@@ -199,23 +225,37 @@ implements ReasoningEngine {
 
       /*
        * Step 5
-       * Generate final answer
+       * Build grounded context from verified evidence
        */
 
-      const result =
-        await this.generator.generate(
+      const context =
+        this.contextBuilder.build(
 
           synthesized
 
         );
 
+      context.query =
+        request.query;
+
 
       /*
-       * Internal explanation pipeline.
-       *
-       * The explanation and trace are currently
-       * built internally and are not exposed
-       * directly through ReasoningResult.
+       * Step 6
+       * Generate final answer from grounded context
+       */
+
+      const result =
+        await this.generator.generate(
+
+          context
+
+        );
+
+
+      /*
+       * Explanation metadata produced by the
+       * existing builders, exposed on the
+       * shared ReasoningResult contract.
        */
 
       const explanation =
@@ -223,19 +263,19 @@ implements ReasoningEngine {
 
           result.answer,
 
-          synthesized.evidence
+          context
 
         );
 
 
-      const trace =
+      const explanationTrace =
         buildReasoningTrace(
 
           request.query,
 
           [],
 
-          synthesized.evidence.length,
+          context.evidence.length,
 
           0,
 
@@ -248,9 +288,30 @@ implements ReasoningEngine {
 
         explanation,
 
-        trace
+        explanationTrace
 
       );
+
+
+      /*
+       * Step 7
+       * Final citation / answer verification against grounded context.
+       * Internal verification report is not exposed on the public result.
+       */
+
+      const verification =
+        this.answerVerifier.verify({
+
+          result,
+
+          context,
+
+          explanation
+
+        });
+
+      const exposedResult: ReasoningResult =
+        verification.result;
 
 
       /*
@@ -308,7 +369,7 @@ implements ReasoningEngine {
       }
 
 
-      return result;
+      return exposedResult;
 
 
     } catch (error) {

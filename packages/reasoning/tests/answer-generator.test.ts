@@ -8,11 +8,20 @@ import {
   DefaultAnswerGenerator
 } from "../src/services/answer-generator.service.js";
 
+import {
+  DefaultContextBuilder
+} from "../src/services/context-builder.service.js";
+
 describe(
 
   "Answer Generator",
 
   () => {
+
+    const builder =
+      new DefaultContextBuilder({
+        maxEvidence: 20
+      });
 
     it(
 
@@ -23,9 +32,8 @@ describe(
         const generator =
           new DefaultAnswerGenerator();
 
-        const result =
-
-          await generator.generate({
+        const context =
+          builder.build({
 
             evidence: [
 
@@ -57,6 +65,11 @@ describe(
 
           });
 
+        const result =
+          await generator.generate(
+            context
+          );
+
         expect(
           result.answer
         ).toContain("PEP-484");
@@ -80,24 +93,26 @@ it(
   async () => {
 
     const generator =
-
       new DefaultAnswerGenerator();
 
-    const result =
+    const builder =
+      new DefaultContextBuilder({
+        maxEvidence: 20
+      });
 
+    const result =
       await generator.generate(
 
-  {
+        builder.build({
 
-    evidence: [],
+          evidence: [],
 
-    comparison:
+          comparison:
+            "Common: Typing"
 
-      "Common: Typing"
+        })
 
-  }
-
-);
+      );
 
     expect(
 

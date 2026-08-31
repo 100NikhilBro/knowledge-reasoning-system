@@ -10,9 +10,16 @@ export const DEFAULT_VERIFICATION_RULES: VerificationRules = {
 
   requireSource: true,
 
+  /**
+   * Canonical knowledge-model types must be allowlisted so relationship
+   * targets (Author via PROPOSED_BY, Decision via RESULTS_IN, etc.) survive
+   * synthesis. "Person" remains for legacy fixtures.
+   */
   allowedEntityTypes: [
 
     "Proposal",
+
+    "Author",
 
     "Person",
 
@@ -22,7 +29,11 @@ export const DEFAULT_VERIFICATION_RULES: VerificationRules = {
 
     "Feature",
 
-    "Concern"
+    "Concern",
+
+    "Decision",
+
+    "PythonVersion"
 
   ]
 

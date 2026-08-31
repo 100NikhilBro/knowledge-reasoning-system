@@ -18,5 +18,15 @@ export const INDEXES = [
   CREATE INDEX concern_label IF NOT EXISTS
   FOR (n:Concern)
   ON (n.label)
+  `,
+    `
+  CREATE INDEX decision_label IF NOT EXISTS
+  FOR (n:Decision)
+  ON (n.label)
+  `,
+    `
+  CREATE INDEX python_version_label IF NOT EXISTS
+  FOR (n:PythonVersion)
+  ON (n.label)
   `
 ];

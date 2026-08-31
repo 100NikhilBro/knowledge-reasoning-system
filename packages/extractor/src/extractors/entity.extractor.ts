@@ -5,19 +5,21 @@ import type { ExtractionRule } from "../contracts/extraction-rule.js";
 
 import { ProposalRule } from "../rules/proposal.rule.js";
 import { AuthorRule } from "../rules/author.rule.js";
-
-
 import { FeatureRule } from "../rules/feature.rule.js";
 import { ConcernRule } from "../rules/concern.rule.js";
+import { DecisionRule } from "../rules/decision.rule.js";
+import { PythonVersionRule } from "../rules/python-version.rule.js";
 
 export class EntityExtractor {
 
   private readonly rules: ExtractionRule[] = [
-  new ProposalRule(),
-  new AuthorRule(),
-  new FeatureRule(),
-  new ConcernRule()
-];
+    new ProposalRule(),
+    new AuthorRule(),
+    new FeatureRule(),
+    new ConcernRule(),
+    new DecisionRule(),
+    new PythonVersionRule()
+  ];
 
   extract(document: ParsedDocument): KnowledgeEntity[] {
 

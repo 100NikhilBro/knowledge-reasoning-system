@@ -77,13 +77,9 @@ export function resolveConflicts(
       };
 
     case "highest-confidence":
-
     case "trusted-source":
-
     case "latest":
-
     case "merge":
-
     default:
 
       return {

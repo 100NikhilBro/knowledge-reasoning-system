@@ -8,12 +8,32 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "echo \"No applications configured yet\"",
-    "build": "echo \"Nothing to build yet\"",
-    "lint": "echo \"Lint not configured\"",
-    "format": "echo \"Format not configured\""
+    "dev:api": "pnpm --filter @knowledge/api dev",
+    "dev:worker": "pnpm --filter @knowledge/worker dev",
+    "dev:web": "pnpm --filter @knowledge/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check \"docs/**/*.{md,markdown}\" \"scripts/**/*.{js,mjs,cjs,ts}\" \".github/**/*.{yml,yaml}\" \"*.md\" \"package.json\" \"pnpm-workspace.yaml\" \".prettierrc.json\" \"eslint.config.mjs\"",
+    "typecheck": "pnpm -r exec tsc -p tsconfig.json --noEmit",
+    "check:env": "node scripts/check-env.mjs",
+    "recreate:qdrant": "node scripts/recreate-qdrant-collection.mjs",
+    "verify": "pnpm check:env && pnpm format:check && pnpm lint && pnpm typecheck && pnpm build && pnpm test",
+    "ci:local": "pnpm verify"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0"
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^26.1.0",
+    "eslint": "^9.39.1",
+    "prettier": "^3.6.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.46.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "rollup": "npm:@rollup/wasm-node@4.63.1"
+    }
   }
 }

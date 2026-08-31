@@ -1,118 +1,230 @@
-// import "@knowledge/shared";
-
-// import express, { Application } from "express";
-
-// const app:Application = express();
-
-// app.use(express.json());
-
-// app.get("/health", (_, res) => {
-//   res.json({
-//     status: "ok",
-//     service: "Knowledge Reasoning API"
-//   });
-// });
-
-// export default app;
-
-
-import "@knowledge/shared";
-
 import express, {
-  type Application
+  type Application,
+  type RequestHandler
 } from "express";
 
-import {
-  DefaultReasoningEngine
+import type {
+  ReasoningEngine
 } from "@knowledge/reasoning";
 
+import type {
+  ReasoningResult
+} from "@knowledge/shared";
+
 import {
-  RedisSessionStateStore
-} from "@knowledge/working-memory";
+  validateReasonRequest
+} from "./validation/validate-reason-request.js";
 
-const app: Application =
-  express();
+import {
+  createProductionReasoningEngine
+} from "./factories/create-production-reasoning-engine.js";
 
-app.use(
-  express.json()
-);
+import {
+  createApiErrorHandler
+} from "./errors/map-error-to-response.js";
+
+import {
+  resolveApiSecurityConfig,
+  type ApiSecurityConfig
+} from "./config/resolve-api-security-config.js";
+
+import {
+  createApiKeyAuthMiddleware
+} from "./middleware/api-key-auth.js";
+
+import {
+  createRateLimitMiddleware
+} from "./middleware/rate-limit.js";
+
+import {
+  createRequestIdMiddleware
+} from "./middleware/request-id.js";
+
+import {
+  createRequestLoggingMiddleware
+} from "./middleware/request-logging.js";
+
+import {
+  createSecurityHeadersMiddleware
+} from "./middleware/security-headers.js";
+
+import {
+  ConsoleLogger,
+  type Logger
+} from "./logging/logger.js";
 
 
-const sessionStateStore =
-  new RedisSessionStateStore();
+export interface ApiDependencies {
 
-const reasoningEngine =
-  new DefaultReasoningEngine(
+  reasoningEngine?: ReasoningEngine;
 
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
+  securityConfig?: ApiSecurityConfig;
 
-    sessionStateStore
+  logger?: Logger;
 
+  /**
+   * Optional overrides for independently testable middleware.
+   */
+  authenticate?: RequestHandler;
+
+  rateLimiter?: RequestHandler;
+
+}
+
+
+function toPublicReasoningResult(
+  result: ReasoningResult
+): ReasoningResult {
+
+  const response: ReasoningResult = {
+
+    answer:
+      result.answer,
+
+    confidence:
+      result.confidence,
+
+    citations:
+      result.citations,
+
+    trace:
+      result.trace
+
+  };
+
+  if (result.comparison !== undefined) {
+
+    response.comparison =
+      result.comparison;
+
+  }
+
+  if (result.explanation !== undefined) {
+
+    response.explanation =
+      result.explanation;
+
+  }
+
+  return response;
+
+}
+
+
+export function createApp(
+  dependencies: ApiDependencies = {}
+): Application {
+
+  const app: Application =
+    express();
+
+  const logger =
+    dependencies.logger ??
+    new ConsoleLogger();
+
+  const securityConfig =
+    dependencies.securityConfig ??
+    resolveApiSecurityConfig();
+
+  const authenticate =
+    dependencies.authenticate ??
+    createApiKeyAuthMiddleware({
+      apiKey: securityConfig.apiKey
+    });
+
+  const rateLimiter =
+    dependencies.rateLimiter ??
+    createRateLimitMiddleware({
+      windowMs:
+        securityConfig.rateLimitWindowMs,
+      maxRequests:
+        securityConfig.rateLimitMaxRequests
+    });
+
+  const reasoningEngine =
+    dependencies.reasoningEngine ??
+    createProductionReasoningEngine();
+
+  /*
+   * Global boundary order:
+   * security headers → request id → request logging → JSON body
+   */
+  app.use(
+    createSecurityHeadersMiddleware()
+  );
+
+  app.use(
+    createRequestIdMiddleware()
+  );
+
+  app.use(
+    createRequestLoggingMiddleware(logger)
+  );
+
+  app.use(
+    express.json()
   );
 
 
-app.get(
-  "/health",
-  (_, res) => {
+  app.get(
+    "/health",
+    (_, res) => {
 
-    res.json({
+      res.json({
 
-      status:
-        "ok",
+        status:
+          "ok",
 
-      service:
-        "Knowledge Reasoning API"
-
-    });
-
-  }
-);
-
-
-app.post(
-  "/reason",
-  async (req, res) => {
-
-    try {
-
-      const result =
-        await reasoningEngine.reason({
-
-          query:
-            req.body.query,
-
-          topK:
-            req.body.topK,
-
-          sessionId:
-            req.body.sessionId
-
-        });
-
-      res.json(result);
-
-    } catch (error) {
-
-      console.error(
-        "Reasoning failed:",
-        error
-      );
-
-      res.status(500).json({
-
-        error:
-          "Reasoning failed"
+        service:
+          "Knowledge Reasoning API"
 
       });
 
     }
-
-  }
-);
+  );
 
 
-export default app;
+  /*
+   * Protected route ordering:
+   * authenticate → rate limit → validation/handler
+   */
+  app.post(
+    "/reason",
+    authenticate,
+    rateLimiter,
+    async (req, res, next) => {
+
+      try {
+
+        const request =
+          validateReasonRequest(
+            req.body
+          );
+
+        const result =
+          await reasoningEngine.reason(
+            request
+          );
+
+        res.json(
+          toPublicReasoningResult(result)
+        );
+
+      } catch (error) {
+
+        next(error);
+
+      }
+
+    }
+  );
+
+
+  app.use(
+    createApiErrorHandler(logger)
+  );
+
+
+  return app;
+
+}

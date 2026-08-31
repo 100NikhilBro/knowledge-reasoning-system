@@ -7,18 +7,25 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test": "vitest --run"
   },
   "dependencies": {
-    "@knowledge/shared": "workspace:*",
     "@knowledge/reasoning": "workspace:*",
+    "@knowledge/retriever": "workspace:*",
+    "@knowledge/shared": "workspace:*",
     "@knowledge/working-memory": "workspace:*",
-    "express": "^5.x"
+    "dotenv": "^17.4.2",
+    "express": "^5.x",
+    "express-rate-limit": "^8.7.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.0",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.4",
     "tsx": "^4.23.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

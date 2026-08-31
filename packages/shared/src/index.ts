@@ -28,6 +28,8 @@ export * from "./contracts/reasoning/reasoning-trace.js";
 
 export * from "./contracts/reasoning/citation.js";
 
+export * from "./contracts/reasoning/answer-explanation.js";
+
 export * from "./contracts/reasoning/reasoning-result.js";
 
 
