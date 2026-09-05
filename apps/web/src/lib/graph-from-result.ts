@@ -38,6 +38,15 @@ export interface RelationshipPathHop {
   toLabel: string;
 }
 
+export type RelationshipViewKind = "path" | "set";
+
+export interface RelationshipViewModel {
+  kind: RelationshipViewKind;
+  hops: RelationshipPathHop[];
+  hubId?: string;
+  hubLabel?: string;
+}
+
 /**
  * Derive graph visualization data only from evidence already present
  * in the public ReasoningResult (trace steps). Never invent edges.
@@ -96,17 +105,20 @@ export function collectGroundedEvidence(
 }
 
 /**
- * Build ordered relationship hops from real edges only.
- * Uses a simple chain walk when the graph forms a path;
- * otherwise returns each unique edge as a hop.
+ * Build relationship visualization from real edges only.
+ * Distinguishes a true multi-hop path from an independent relationship set
+ * (e.g. hub-and-spoke from a shared source).
  */
-export function deriveRelationshipPath(
+export function deriveRelationshipView(
   result: ReasoningResult | null
-): RelationshipPathHop[] {
+): RelationshipViewModel {
   const graph = deriveGraphFromResult(result);
 
   if (!graph.hasRelationshipData) {
-    return [];
+    return {
+      kind: "set",
+      hops: []
+    };
   }
 
   const labelById = new Map(
@@ -121,7 +133,42 @@ export function deriveRelationshipPath(
     toLabel: labelById.get(edge.to) ?? edge.to
   }));
 
-  return orderHops(hops);
+  const chain = findTruePath(hops);
+
+  if (chain) {
+    return {
+      kind: "path",
+      hops: chain
+    };
+  }
+
+  const hubId = findHubId(hops);
+  const hubLabel =
+    hubId
+      ? labelById.get(hubId) ??
+        hops.find((hop) => hop.fromId === hubId)?.fromLabel ??
+        hops.find((hop) => hop.toId === hubId)?.toLabel ??
+        hubId
+      : undefined;
+
+  return {
+    kind: "set",
+    hops: hubId
+      ? [
+          ...hops.filter((hop) => hop.fromId === hubId || hop.toId === hubId),
+          ...hops.filter((hop) => hop.fromId !== hubId && hop.toId !== hubId)
+        ]
+      : hops,
+    hubId,
+    hubLabel
+  };
+}
+
+/** @deprecated Prefer deriveRelationshipView for topology-aware UI. */
+export function deriveRelationshipPath(
+  result: ReasoningResult | null
+): RelationshipPathHop[] {
+  return deriveRelationshipView(result).hops;
 }
 
 function prefersEvidence(
@@ -196,24 +243,84 @@ function ensureEndpoint(
   id: string,
   fallback: KnowledgeEntity
 ): void {
-  if (nodes.has(id)) {
+  const existing = nodes.get(id);
+
+  if (!existing) {
+    nodes.set(id, {
+      id,
+      label: id === fallback.id ? fallback.label : humanizeEntityId(id),
+      type: id === fallback.id ? fallback.type : inferTypeFromId(id),
+      source: fallback.source,
+      confidence: fallback.confidence,
+      provenance: "unknown"
+    });
     return;
   }
 
-  nodes.set(id, {
-    id,
-    label: id === fallback.id ? fallback.label : id,
-    type: id === fallback.id ? fallback.type : "Entity",
-    source: fallback.source,
-    confidence: fallback.confidence,
-    provenance: "unknown"
-  });
+  if (
+    existing.label === id &&
+    id === fallback.id &&
+    fallback.label &&
+    fallback.label !== id
+  ) {
+    nodes.set(id, {
+      ...existing,
+      label: fallback.label,
+      type: fallback.type
+    });
+  }
 }
 
-function orderHops(
+function humanizeEntityId(id: string): string {
+  if (!id.includes(":")) {
+    return id;
+  }
+  return id.slice(id.indexOf(":") + 1);
+}
+
+function inferTypeFromId(id: string): string {
+  const prefix = id.split(":")[0];
+  if (!prefix) {
+    return "Entity";
+  }
+  return prefix.charAt(0).toUpperCase() + prefix.slice(1);
+}
+
+function findHubId(
   hops: RelationshipPathHop[]
-): RelationshipPathHop[] {
-  if (hops.length <= 1) {
+): string | undefined {
+  const degree = new Map<string, number>();
+
+  for (const hop of hops) {
+    degree.set(hop.fromId, (degree.get(hop.fromId) ?? 0) + 1);
+    degree.set(hop.toId, (degree.get(hop.toId) ?? 0) + 1);
+  }
+
+  let hub: string | undefined;
+  let best = 0;
+
+  for (const [id, value] of degree) {
+    if (value > best) {
+      best = value;
+      hub = id;
+    }
+  }
+
+  return best >= 2 ? hub : undefined;
+}
+
+/**
+ * True multi-hop path: consecutive hops share endpoints (A→B→C).
+ * Independent spokes from one hub are NOT a path.
+ */
+function findTruePath(
+  hops: RelationshipPathHop[]
+): RelationshipPathHop[] | null {
+  if (hops.length === 0) {
+    return null;
+  }
+
+  if (hops.length === 1) {
     return hops;
   }
 
@@ -231,45 +338,53 @@ function orderHops(
     .map((hop) => hop.fromId)
     .filter((id) => !inbound.has(id));
 
-  const start =
-    starts[0] ?? hops[0]?.fromId;
+  for (const start of starts.length > 0 ? starts : [hops[0]!.fromId]) {
+    const ordered: RelationshipPathHop[] = [];
+    const used = new Set<string>();
+    let current: string | undefined = start;
 
-  if (!start) {
-    return hops;
-  }
+    while (current) {
+      const nextList: RelationshipPathHop[] =
+        outgoing.get(current) ?? [];
+      const next: RelationshipPathHop | undefined =
+        nextList.find(
+          (hop: RelationshipPathHop) =>
+            !used.has(
+              `${hop.fromId}|${hop.relationshipType}|${hop.toId}`
+            )
+        );
 
-  const ordered: RelationshipPathHop[] = [];
-  const used = new Set<string>();
-  let current: string | undefined = start;
+      if (!next) {
+        break;
+      }
 
-  while (current) {
-    const nextList: RelationshipPathHop[] =
-      outgoing.get(current) ?? [];
-    const next: RelationshipPathHop | undefined =
-      nextList.find(
-        (hop: RelationshipPathHop) =>
-          !used.has(
-            `${hop.fromId}|${hop.relationshipType}|${hop.toId}`
-          )
+      used.add(
+        `${next.fromId}|${next.relationshipType}|${next.toId}`
       );
-
-    if (!next) {
-      break;
+      ordered.push(next);
+      current = next.toId;
     }
 
-    used.add(
-      `${next.fromId}|${next.relationshipType}|${next.toId}`
-    );
-    ordered.push(next);
-    current = next.toId;
-  }
-
-  for (const hop of hops) {
-    const key = `${hop.fromId}|${hop.relationshipType}|${hop.toId}`;
-    if (!used.has(key)) {
-      ordered.push(hop);
+    if (
+      ordered.length === hops.length &&
+      ordered.length >= 2 &&
+      isStrictChain(ordered)
+    ) {
+      return ordered;
     }
   }
 
-  return ordered;
+  return null;
+}
+
+function isStrictChain(
+  hops: RelationshipPathHop[]
+): boolean {
+  for (let index = 1; index < hops.length; index += 1) {
+    if (hops[index - 1]!.toId !== hops[index]!.fromId) {
+      return false;
+    }
+  }
+
+  return true;
 }

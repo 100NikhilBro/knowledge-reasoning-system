@@ -1,14 +1,30 @@
 /**
- * Detect open-ended "relationship between A and B" queries.
+ * Detect relationship queries between two named endpoints.
  *
- * These require a grounded graph edge connecting both sides — never
- * substitute unrelated neighbors of only one side.
+ * Modes:
+ * - direct: exact endpoint-to-endpoint edge required
+ * - connected: multi-hop / shared-hub bridge allowed
+ * - bridge: explicit path through a named intermediate
  */
+
+export type RelationshipBetweenMode =
+  | "direct"
+  | "connected"
+  | "bridge";
+
 export interface RelationshipBetweenQuery {
   left: string;
   right: string;
+  mode: RelationshipBetweenMode;
+  bridge?: string;
 }
 
+const DIRECTNESS_CUE =
+  /\bdirectly\s+(?:related|connected|linked)\b|\bdirect\s+(?:relationship|connection|edge|link)\b/i;
+
+/**
+ * Detect open-ended relationship queries between two sides.
+ */
 export function detectRelationshipBetweenQuery(
   query: string
 ): RelationshipBetweenQuery | undefined {
@@ -16,29 +32,101 @@ export function detectRelationshipBetweenQuery(
   const normalized =
     query.trim().replace(/\s+/g, " ");
 
-  const match =
+  if (!normalized) {
+    return undefined;
+  }
+
+  const throughMatch =
     normalized.match(
-      /relationship\s+between\s+(.+?)\s+and\s+(.+?)\s*\??$/i
+      /how\s+(?:is|are)\s+(.+?)\s+(?:and|&)\s+(.+?)\s+connected\s+through\s+(.+?)\s*\??$/i
+    ) ??
+    normalized.match(
+      /how\s+(?:is|are)\s+(.+?)\s+connected\s+to\s+(.+?)\s+through\s+(.+?)\s*\??$/i
+    ) ??
+    normalized.match(
+      /how\s+(?:is|are)\s+(.+?)\s+(?:and|&)\s+(.+?)\s+connected\s+via\s+(.+?)\s*\??$/i
     );
 
-  if (!match) {
-    return undefined;
+  if (throughMatch) {
+    const left =
+      cleanEndpoint(throughMatch[1]);
+    const right =
+      cleanEndpoint(throughMatch[2]);
+    const bridge =
+      cleanEndpoint(throughMatch[3]);
+
+    if (left && right && bridge) {
+      return {
+        left,
+        right,
+        mode: "bridge",
+        bridge
+      };
+    }
   }
 
-  const left =
-    match[1]?.trim();
+  const classic =
+    normalized.match(
+      /(?:what\s+is\s+the\s+)?relationship\s+between\s+(.+?)\s+and\s+(.+?)\s*\??$/i
+    );
 
-  const right =
-    match[2]?.trim().replace(/\?+$/, "").trim();
+  if (classic) {
+    const left =
+      cleanEndpoint(classic[1]);
+    const right =
+      cleanEndpoint(classic[2]);
 
-  if (!left || !right) {
-    return undefined;
+    if (left && right) {
+      return {
+        left,
+        right,
+        mode: queryRequestsDirectRelationship(normalized)
+          ? "direct"
+          : "connected"
+      };
+    }
   }
 
-  return {
-    left,
-    right
-  };
+  const relatedMatch =
+    normalized.match(
+      /how\s+(?:is|are)\s+(.+?)\s+directly\s+(?:related|connected|linked)\s+to\s+(.+?)\s*\??$/i
+    ) ??
+    normalized.match(
+      /how\s+(?:is|are)\s+(.+?)\s+(?:related|connected|linked)\s+to\s+(.+?)\s*\??$/i
+    ) ??
+    normalized.match(
+      /how\s+(?:is|are)\s+(.+?)\s+(?:and|&)\s+(.+?)\s+(?:directly\s+)?(?:related|connected|linked)\s*\??$/i
+    );
+
+  if (relatedMatch) {
+    const left =
+      cleanEndpoint(relatedMatch[1]);
+    const right =
+      cleanEndpoint(relatedMatch[2]);
+
+    if (left && right) {
+      return {
+        left,
+        right,
+        mode: queryRequestsDirectRelationship(normalized)
+          ? "direct"
+          : "connected"
+      };
+    }
+  }
+
+  return undefined;
+
+}
+
+/**
+ * Explicit directness language requiring an exact endpoint edge.
+ */
+export function queryRequestsDirectRelationship(
+  query: string
+): boolean {
+
+  return DIRECTNESS_CUE.test(query);
 
 }
 
@@ -82,6 +170,26 @@ export function entityMatchesPhrase(
   ];
 
   return fields.some(field => textMatchesPhrase(field, needle));
+
+}
+
+function cleanEndpoint(
+  value: string | undefined
+): string | undefined {
+
+  if (!value) {
+    return undefined;
+  }
+
+  return value
+    .trim()
+    .replace(/[?.,;:]+$/g, "")
+    .replace(/^(?:the|a|an)\s+/i, "")
+    .replace(
+      /\s+(?:feature|concern|proposal|author|entity|module|protocol)\s*$/i,
+      ""
+    )
+    .trim();
 
 }
 

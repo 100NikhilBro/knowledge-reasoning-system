@@ -1,14 +1,16 @@
-import type { RelationshipPathHop } from "../lib/graph-from-result";
+import type { RelationshipViewModel } from "../lib/graph-from-result";
 
 interface RelationshipPathProps {
-  hops: RelationshipPathHop[];
+  view: RelationshipViewModel;
 }
 
 /**
- * SVG relationship path built only from backend relationship hops.
+ * Relationship visualization from real backend edges only.
+ * Renders a sequential path for true multi-hop chains, otherwise a
+ * relationship set / hub branch list (never a fake linear path).
  */
-export function RelationshipPath({ hops }: RelationshipPathProps) {
-  if (hops.length === 0) {
+export function RelationshipPath({ view }: RelationshipPathProps) {
+  if (view.hops.length === 0) {
     return (
       <section className="panel" aria-labelledby="path-title">
         <div className="panel-header">
@@ -27,6 +29,15 @@ export function RelationshipPath({ hops }: RelationshipPathProps) {
     );
   }
 
+  if (view.kind === "path") {
+    return <PathChain view={view} />;
+  }
+
+  return <RelationshipSet view={view} />;
+}
+
+function PathChain({ view }: { view: RelationshipViewModel }) {
+  const hops = view.hops;
   const nodeWidth = 148;
   const gap = 56;
   const height = 112;
@@ -58,12 +69,12 @@ export function RelationshipPath({ hops }: RelationshipPathProps) {
     <section className="panel" aria-labelledby="path-title">
       <div className="panel-header">
         <div>
-          <p className="panel-kicker">Relationships</p>
+          <p className="panel-kicker">Multi-hop path</p>
           <h2 className="panel-title" id="path-title">
             Relationship path
           </h2>
         </div>
-        <span className="mono muted">{hops.length} edges</span>
+        <span className="mono muted">{hops.length} hops</span>
       </div>
 
       <div className="path-scroll">
@@ -76,7 +87,7 @@ export function RelationshipPath({ hops }: RelationshipPathProps) {
               (hop) =>
                 `${hop.fromLabel} ${hop.relationshipType} ${hop.toLabel}`
             )
-            .join(", ")}
+            .join(", then ")}
         >
           <defs>
             <marker
@@ -145,7 +156,7 @@ export function RelationshipPath({ hops }: RelationshipPathProps) {
         </svg>
       </div>
 
-      <ol className="path-list" aria-label="Relationship hops">
+      <ol className="path-list" aria-label="Multi-hop relationship path">
         {hops.map((hop, index) => (
           <li key={`${hop.fromId}-${hop.relationshipType}-${hop.toId}-${index}`}>
             <span className="path-list-from">{hop.fromLabel}</span>
@@ -154,6 +165,47 @@ export function RelationshipPath({ hops }: RelationshipPathProps) {
           </li>
         ))}
       </ol>
+    </section>
+  );
+}
+
+function RelationshipSet({ view }: { view: RelationshipViewModel }) {
+  return (
+    <section className="panel" aria-labelledby="path-title">
+      <div className="panel-header">
+        <div>
+          <p className="panel-kicker">Relationship set</p>
+          <h2 className="panel-title" id="path-title">
+            Grounded relationships
+          </h2>
+        </div>
+        <span className="mono muted">{view.hops.length} edges</span>
+      </div>
+
+      <p className="muted path-set-note">
+        {view.hubLabel
+          ? `Independent relationships branching from ${view.hubLabel}. Not a single multi-hop path.`
+          : "Independent grounded relationships. Not rendered as a single multi-hop path."}
+      </p>
+
+      <ul className="relationship-set" aria-label="Grounded relationship set">
+        {view.hops.map((hop, index) => (
+          <li
+            key={`${hop.fromId}-${hop.relationshipType}-${hop.toId}-${index}`}
+            className="relationship-set-item"
+          >
+            <span className="relationship-set-from">{hop.fromLabel}</span>
+            <span className="relationship-set-arrow" aria-hidden="true">
+              <span className="relationship-set-line" />
+              <span className="relationship-set-rel mono">
+                {hop.relationshipType}
+              </span>
+              <span className="relationship-set-head">→</span>
+            </span>
+            <span className="relationship-set-to">{hop.toLabel}</span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

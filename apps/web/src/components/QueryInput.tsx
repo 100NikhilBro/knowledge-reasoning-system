@@ -38,9 +38,9 @@ export function QueryInput({
     <section className="panel query-panel" aria-labelledby="query-title">
       <div className="panel-header">
         <div>
-          <p className="panel-kicker">Query</p>
+          <p className="panel-kicker">Knowledge reasoning</p>
           <h2 className="panel-title" id="query-title">
-            Ask a complex knowledge question
+            Reason from evidence.
           </h2>
         </div>
       </div>
@@ -49,13 +49,17 @@ export function QueryInput({
         <label className="visually-hidden" htmlFor="reasoning-query">
           Reasoning query
         </label>
+        <p className="query-support muted">
+          Ask a question and follow the relationships, evidence, and
+          reasoning behind the answer.
+        </p>
         <textarea
           id="reasoning-query"
           className="query-input"
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask across entities, relationships, and multi-hop evidence…"
+          placeholder="What is connected, who proposed it, and what concern does it address?"
           disabled={loading}
           rows={3}
         />

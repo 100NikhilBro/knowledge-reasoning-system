@@ -176,7 +176,12 @@ describe("Knowledge Reasoning Web UI", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: /Evidence-grounded reasoning/i
+        name: /Start with grounded evidence/i
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: /Reason from evidence/i
       })
     ).toBeInTheDocument();
     expect(
@@ -194,6 +199,9 @@ describe("Knowledge Reasoning Web UI", () => {
       "href",
       "https://github.com/100NikhilBro/knowledge-reasoning-system"
     );
+    expect(
+      screen.getByRole("button", { name: /Switch to light theme/i })
+    ).toBeInTheDocument();
   });
 
   it("A: successful grounded answer", async () => {
@@ -228,17 +236,11 @@ describe("Knowledge Reasoning Web UI", () => {
     await runQuery("How is PEP-484 connected to type hints?");
 
     const pathHeading = await screen.findByRole("heading", {
-      name: /Relationship path/i
+      name: /Grounded relationships|Relationship path/i
     });
     const pathPanel = pathHeading.closest("section");
     expect(pathPanel).not.toBeNull();
 
-    expect(
-      within(pathPanel as HTMLElement).getByRole("img")
-    ).toHaveAttribute(
-      "aria-label",
-      expect.stringMatching(/INTRODUCES/i)
-    );
     expect(
       within(pathPanel as HTMLElement).getAllByText("INTRODUCES").length
     ).toBeGreaterThan(0);
@@ -345,7 +347,7 @@ describe("Knowledge Reasoning Web UI", () => {
     expect(screen.getByLabelText(/Reasoning query/i)).toBeInTheDocument();
     expect(
       screen.getByRole("heading", {
-        name: /Ask a complex knowledge question/i
+        name: /Reason from evidence/i
       })
     ).toBeInTheDocument();
   });
@@ -429,7 +431,7 @@ describe("Knowledge Reasoning Web UI", () => {
     mockApi({});
     const { container } = render(<App />);
     await screen.findByRole("heading", {
-      name: /Evidence-grounded reasoning/i
+      name: /Start with grounded evidence/i
     });
 
     expect(container.textContent).not.toMatch(/change-me-in-development/);

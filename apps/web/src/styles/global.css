@@ -1,4 +1,39 @@
-:root {
+:root,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-0: #0b0b0c;
+  --bg-1: #121214;
+  --bg-2: #18181b;
+  --bg-3: #222226;
+  --ink: #f4f1ea;
+  --ink-soft: #d2cdc3;
+  --muted: #9a958c;
+  --faint: #6f6b64;
+  --line: rgba(244, 241, 234, 0.12);
+  --line-strong: rgba(244, 241, 234, 0.22);
+  --accent: #f4f1ea;
+  --accent-soft: rgba(244, 241, 234, 0.08);
+  --accent-ink: #f4f1ea;
+  --warn: #d4a15c;
+  --warn-soft: rgba(212, 161, 92, 0.14);
+  --danger: #e07a7a;
+  --danger-soft: rgba(224, 122, 122, 0.14);
+  --ok: #7dba9a;
+  --ok-soft: rgba(125, 186, 154, 0.14);
+  --glass: rgba(24, 24, 27, 0.92);
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset,
+    0 10px 28px rgba(0, 0, 0, 0.35);
+  --radius: 8px;
+  --radius-sm: 4px;
+  --font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "Fraunces", "IBM Plex Sans", Georgia, serif;
+  --shell-max: 1100px;
+  --button-fg: #0b0b0c;
+  --input-bg: #121214;
+}
+
+html[data-theme="light"] {
   color-scheme: light;
   --bg-0: #f3efe6;
   --bg-1: #f7f3ea;
@@ -22,12 +57,8 @@
   --glass: rgba(255, 253, 248, 0.92);
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset,
     0 8px 24px rgba(17, 17, 17, 0.04);
-  --radius: 8px;
-  --radius-sm: 4px;
-  --font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --font-display: "Fraunces", "IBM Plex Sans", Georgia, serif;
-  --shell-max: 1100px;
+  --button-fg: #fffdf8;
+  --input-bg: #f7f3ea;
 }
 
 *,
@@ -50,10 +81,21 @@ body {
   margin: 0;
   font-family: var(--font-sans);
   color: var(--ink);
+  background: var(--bg-0);
+  -webkit-font-smoothing: antialiased;
+}
+
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(900px 420px at 10% -8%, rgba(244, 241, 234, 0.05), transparent 55%),
+    linear-gradient(180deg, #101012 0%, var(--bg-0) 55%, #080809 100%);
+  background-attachment: fixed;
+}
+
+html[data-theme="light"] body {
   background:
     linear-gradient(180deg, #faf6ee 0%, var(--bg-0) 42%, #efe9dc 100%);
   background-attachment: fixed;
-  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -192,6 +234,33 @@ a {
   border-color: var(--ink);
 }
 
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  min-height: 2.4rem;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus-visible {
+  background: var(--bg-3);
+  border-color: var(--ink);
+}
+
+.theme-toggle-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
 .github-icon {
   flex-shrink: 0;
 }
@@ -270,6 +339,11 @@ a {
   gap: 0.85rem;
 }
 
+.query-support {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
 .query-input {
   width: 100%;
   min-height: 5.75rem;
@@ -277,7 +351,7 @@ a {
   padding: 1rem 1.05rem;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  background: var(--bg-1);
+  background: var(--input-bg);
   color: var(--ink);
   font-size: 1rem;
   line-height: 1.55;
@@ -304,7 +378,7 @@ a {
 .button {
   border: 1px solid var(--ink);
   background: var(--ink);
-  color: var(--bg-2);
+  color: var(--button-fg);
   padding: 0.7rem 1.15rem;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
@@ -316,7 +390,7 @@ a {
 }
 
 .button:hover:not(:disabled) {
-  background: #2a2a2a;
+  opacity: 0.92;
 }
 
 .button:active:not(:disabled) {
@@ -364,6 +438,11 @@ a {
 }
 
 .answer-panel[data-state="fail_closed"] {
+  border-color: rgba(212, 161, 92, 0.45);
+  background: linear-gradient(180deg, rgba(212, 161, 92, 0.08), var(--bg-2));
+}
+
+html[data-theme="light"] .answer-panel[data-state="fail_closed"] {
   border-color: rgba(138, 90, 18, 0.4);
   background: linear-gradient(180deg, #fff8ec, var(--bg-2));
 }
@@ -673,6 +752,64 @@ a {
   font-size: 0.7rem;
 }
 
+.path-set-note {
+  margin: 0 0 0.85rem;
+}
+
+.relationship-set {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.relationship-set-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+}
+
+.relationship-set-from,
+.relationship-set-to {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.relationship-set-to {
+  text-align: right;
+}
+
+.relationship-set-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+}
+
+.relationship-set-line {
+  display: none;
+}
+
+.relationship-set-rel {
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+  color: var(--ink);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}
+
+.relationship-set-head {
+  font-size: 0.95rem;
+}
+
 .trace-tree {
   margin: 0;
   padding: 0;
@@ -818,11 +955,15 @@ a {
   gap: 1rem;
   align-items: center;
   flex-wrap: wrap;
-  border: 1px solid rgba(143, 47, 47, 0.35);
+  border: 1px solid rgba(224, 122, 122, 0.4);
   background: var(--danger-soft);
-  color: #6d2424;
+  color: var(--danger);
   padding: 0.85rem 1rem;
   border-radius: var(--radius);
+}
+
+html[data-theme="light"] .error-banner {
+  color: #6d2424;
 }
 
 .error-kind {
@@ -875,9 +1016,14 @@ a {
 
 .graph-svg {
   width: 100%;
-  height: 16.5rem;
+  height: 19rem;
   display: block;
   color: var(--ink);
+}
+
+.graph-edge-label-bg {
+  fill: var(--bg-2);
+  stroke: var(--line);
 }
 
 .graph-node {
@@ -1073,11 +1219,22 @@ a {
     padding: 0.85rem 0.65rem 2rem;
   }
 
-  .github-link span {
+  .github-link span,
+  .theme-toggle span:not(.theme-toggle-icon) {
     display: none;
   }
 
-  .github-link {
+  .github-link,
+  .theme-toggle {
     padding: 0.4rem;
+  }
+
+  .relationship-set-item {
+    grid-template-columns: 1fr;
+    text-align: left;
+  }
+
+  .relationship-set-to {
+    text-align: left;
   }
 }

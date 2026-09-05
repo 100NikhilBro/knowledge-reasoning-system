@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   collectGroundedEvidence,
   deriveGraphFromResult,
-  deriveRelationshipPath
+  deriveRelationshipPath,
+  deriveRelationshipView
 } from "./graph-from-result";
 import {
   classifyGroundingState,
@@ -12,13 +13,14 @@ import {
 import type { ReasoningResult } from "../types/reasoning";
 
 const sample: ReasoningResult = {
-  answer: "Proposal: Type Hints",
+  answer: "Type Hints introduced Typing.",
   confidence: 0.64,
   citations: [],
   trace: {
     steps: [
       {
-        description: "Selected Proposal: Type Hints via INTRODUCES (a → b)",
+        description:
+          "Selected Proposal: Type Hints via INTRODUCES (proposal:PEP-484 → feature:typing)",
         evidence: [
           {
             entity: {
@@ -42,7 +44,65 @@ const sample: ReasoningResult = {
         ]
       },
       {
-        description: "Selected Feature: Typing",
+        description:
+          "Selected Proposal: Type Hints via ADDRESSES (proposal:PEP-484 → concern:readability)",
+        evidence: [
+          {
+            entity: {
+              id: "proposal:PEP-484",
+              type: "Proposal",
+              label: "Type Hints",
+              source: "pep-484.md",
+              confidence: 1,
+              properties: {}
+            },
+            score: 0.85,
+            source: "graph",
+            relationship: {
+              from: "proposal:PEP-484",
+              to: "concern:readability",
+              type: "ADDRESSES",
+              confidence: 1
+            }
+          }
+        ]
+      },
+      {
+        description:
+          "Selected Proposal: Type Hints via PROPOSED_BY (proposal:PEP-484 → author:guido-van-rossum)",
+        evidence: [
+          {
+            entity: {
+              id: "author:guido-van-rossum",
+              type: "Author",
+              label: "Guido van Rossum",
+              source: "pep-484.md",
+              confidence: 1,
+              properties: {}
+            },
+            score: 0.8,
+            source: "graph",
+            relationship: {
+              from: "proposal:PEP-484",
+              to: "author:guido-van-rossum",
+              type: "PROPOSED_BY",
+              confidence: 1
+            }
+          }
+        ]
+      }
+    ]
+  }
+};
+
+const chainSample: ReasoningResult = {
+  answer: "Typing addressed Readability.",
+  confidence: 0.7,
+  citations: [],
+  trace: {
+    steps: [
+      {
+        description: "hop1",
         evidence: [
           {
             entity: {
@@ -53,8 +113,31 @@ const sample: ReasoningResult = {
               confidence: 1,
               properties: {}
             },
+            score: 0.9,
+            source: "graph",
+            relationship: {
+              from: "proposal:PEP-484",
+              to: "feature:typing",
+              type: "INTRODUCES",
+              confidence: 1
+            }
+          }
+        ]
+      },
+      {
+        description: "hop2",
+        evidence: [
+          {
+            entity: {
+              id: "concern:readability",
+              type: "Concern",
+              label: "Readability",
+              source: "pep-484.md",
+              confidence: 1,
+              properties: {}
+            },
             score: 0.8,
-            source: "vector",
+            source: "graph",
             relationship: {
               from: "feature:typing",
               to: "concern:readability",
@@ -94,21 +177,34 @@ describe("frontend result helpers", () => {
     ).toBe("fail_closed");
   });
 
-  it("derives relationship paths without inventing edges", () => {
-    const path = deriveRelationshipPath(sample);
-    expect(path.map((hop) => hop.relationshipType)).toEqual([
+  it("treats hub spokes as a relationship set, not a fake path", () => {
+    const view = deriveRelationshipView(sample);
+    expect(view.kind).toBe("set");
+    expect(view.hubId).toBe("proposal:PEP-484");
+    expect(view.hops.map((hop) => hop.relationshipType).sort()).toEqual([
+      "ADDRESSES",
       "INTRODUCES",
-      "ADDRESSES"
+      "PROPOSED_BY"
     ]);
 
     const graph = deriveGraphFromResult(sample);
     expect(graph.hasRelationshipData).toBe(true);
-    expect(graph.edges).toHaveLength(2);
+    expect(graph.edges).toHaveLength(3);
 
     const evidence = collectGroundedEvidence(sample);
     expect(evidence.map((item) => item.entity.id).sort()).toEqual([
-      "feature:typing",
+      "author:guido-van-rossum",
       "proposal:PEP-484"
     ]);
+  });
+
+  it("keeps true multi-hop chains as a path", () => {
+    const view = deriveRelationshipView(chainSample);
+    expect(view.kind).toBe("path");
+    expect(view.hops.map((hop) => hop.relationshipType)).toEqual([
+      "INTRODUCES",
+      "ADDRESSES"
+    ]);
+    expect(deriveRelationshipPath(chainSample)).toHaveLength(2);
   });
 });

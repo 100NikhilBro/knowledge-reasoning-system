@@ -146,7 +146,8 @@ describe("detectRelationshipBetweenQuery", () => {
       )
     ).toEqual({
       left: "PEP-484",
-      right: "quantum computing"
+      right: "quantum computing",
+      mode: "connected"
     });
   });
 
@@ -165,17 +166,14 @@ describe("detectRelationshipBetweenQuery", () => {
 });
 
 describe("unsupported relationship-between fail-closed", () => {
-  it("plans relationship-between as single-hop with pair requirement", async () => {
+  it("plans relationship-between as multi-hop connected pair ask", async () => {
     const plan = await new DefaultReasoningPlanner().plan({
       query:
         "What is the relationship between PEP-484 and quantum computing?"
     });
 
-    expect(plan.strategy).toBe("single-hop");
-    expect(plan.requireRelationshipBetween).toEqual({
-      left: "PEP-484",
-      right: "quantum computing"
-    });
+    expect(plan.strategy).toBe("multi-hop");
+    expect(plan.requireRelationshipBetween).toBeUndefined();
     expect(plan.focusRelationships).toBeUndefined();
   });
 

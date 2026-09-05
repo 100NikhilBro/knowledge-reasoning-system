@@ -16,14 +16,14 @@ export function EmptyState({ onSelectExample }: EmptyStateProps) {
   return (
     <section className="panel empty-state" aria-labelledby="empty-title">
       <div>
-        <p className="panel-kicker">Workspace</p>
+        <p className="panel-kicker">Knowledge reasoning</p>
         <h2 className="panel-title" id="empty-title">
-          Evidence-grounded reasoning
+          Start with grounded evidence.
         </h2>
       </div>
       <p className="muted">
-        KRS answers from indexed graph and vector evidence. Unsupported
-        questions fail closed instead of inventing claims.
+        Ask a question and follow the relationships, evidence, and reasoning
+        behind the answer. Unsupported claims fail closed.
       </p>
 
       <ol className="empty-pipeline" aria-label="Reasoning pipeline">

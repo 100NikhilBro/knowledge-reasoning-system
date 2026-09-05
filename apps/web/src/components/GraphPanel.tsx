@@ -1,26 +1,79 @@
 import { useMemo, useState } from "react";
-import type { GraphNode, GraphViewModel } from "../lib/graph-from-result";
+import type {
+  GraphEdge,
+  GraphNode,
+  GraphViewModel
+} from "../lib/graph-from-result";
 import { ProvenanceBadge } from "./ProvenanceBadge";
 
 interface GraphPanelProps {
   model: GraphViewModel;
 }
 
-function layoutNodes(nodes: GraphNode[]) {
+interface PositionedNode extends GraphNode {
+  x: number;
+  y: number;
+}
+
+/**
+ * Hub-and-spoke when one node has degree ≥ 2; otherwise a balanced ring.
+ * Positions follow real edge endpoints — never invents links.
+ */
+function layoutNodes(
+  nodes: GraphNode[],
+  edges: GraphEdge[]
+): PositionedNode[] {
   const width = 640;
-  const height = 260;
+  const height = 300;
   const cx = width / 2;
   const cy = height / 2;
-  const radius = Math.min(width, height) * 0.34;
 
   if (nodes.length === 0) {
     return [];
   }
 
   if (nodes.length === 1) {
-    return [{ ...nodes[0], x: cx, y: cy }];
+    return [{ ...nodes[0]!, x: cx, y: cy }];
   }
 
+  const degree = new Map<string, number>();
+  for (const node of nodes) {
+    degree.set(node.id, 0);
+  }
+  for (const edge of edges) {
+    degree.set(edge.from, (degree.get(edge.from) ?? 0) + 1);
+    degree.set(edge.to, (degree.get(edge.to) ?? 0) + 1);
+  }
+
+  let hubId: string | undefined;
+  let best = 0;
+  for (const [id, value] of degree) {
+    if (value > best) {
+      best = value;
+      hubId = id;
+    }
+  }
+
+  if (hubId && best >= 2) {
+    const hub = nodes.find((node) => node.id === hubId)!;
+    const spokes = nodes.filter((node) => node.id !== hubId);
+    const radius = Math.min(width, height) * 0.36;
+
+    return [
+      { ...hub, x: cx, y: cy },
+      ...spokes.map((node, index) => {
+        const angle =
+          (Math.PI * 2 * index) / Math.max(spokes.length, 1) - Math.PI / 2;
+        return {
+          ...node,
+          x: cx + Math.cos(angle) * radius,
+          y: cy + Math.sin(angle) * radius
+        };
+      })
+    ];
+  }
+
+  const radius = Math.min(width, height) * 0.34;
   return nodes.map((node, index) => {
     const angle = (Math.PI * 2 * index) / nodes.length - Math.PI / 2;
     return {
@@ -31,11 +84,37 @@ function layoutNodes(nodes: GraphNode[]) {
   });
 }
 
+function edgeGeometry(
+  from: PositionedNode,
+  to: PositionedNode
+): { x1: number; y1: number; x2: number; y2: number; mx: number; my: number } {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const inset = 24;
+  const ux = dx / length;
+  const uy = dy / length;
+
+  const x1 = from.x + ux * inset;
+  const y1 = from.y + uy * inset;
+  const x2 = to.x - ux * inset;
+  const y2 = to.y - uy * inset;
+
+  return {
+    x1,
+    y1,
+    x2,
+    y2,
+    mx: (x1 + x2) / 2,
+    my: (y1 + y2) / 2
+  };
+}
+
 export function GraphPanel({ model }: GraphPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const positioned = useMemo(
-    () => layoutNodes(model.nodes),
-    [model.nodes]
+    () => layoutNodes(model.nodes, model.edges),
+    [model.nodes, model.edges]
   );
 
   const selected =
@@ -69,21 +148,25 @@ export function GraphPanel({ model }: GraphPanelProps) {
               Showing entities from grounded evidence. No relationship edges
               were present in this result.
             </p>
-          ) : null}
+          ) : (
+            <p className="muted" style={{ marginBottom: "0.75rem" }}>
+              Topology follows real source → relationship → target edges only.
+            </p>
+          )}
 
           <div className="graph-canvas">
             <svg
               className="graph-svg"
-              viewBox="0 0 640 260"
+              viewBox="0 0 640 300"
               role="img"
               aria-label="Entity graph derived from reasoning evidence"
             >
               <defs>
                 <marker
                   id="graph-arrow"
-                  markerWidth="7"
-                  markerHeight="7"
-                  refX="6"
+                  markerWidth="8"
+                  markerHeight="8"
+                  refX="7"
                   refY="3"
                   orient="auto"
                 >
@@ -97,22 +180,29 @@ export function GraphPanel({ model }: GraphPanelProps) {
                 if (!from || !to) {
                   return null;
                 }
-                const mx = (from.x + to.x) / 2;
-                const my = (from.y + to.y) / 2;
+                const geometry = edgeGeometry(from, to);
                 return (
                   <g key={edge.id} className="graph-edge-group">
                     <line
                       className="graph-edge"
-                      x1={from.x}
-                      y1={from.y}
-                      x2={to.x}
-                      y2={to.y}
+                      x1={geometry.x1}
+                      y1={geometry.y1}
+                      x2={geometry.x2}
+                      y2={geometry.y2}
                       markerEnd="url(#graph-arrow)"
+                    />
+                    <rect
+                      className="graph-edge-label-bg"
+                      x={geometry.mx - 44}
+                      y={geometry.my - 18}
+                      width="88"
+                      height="18"
+                      rx="2"
                     />
                     <text
                       className="graph-edge-label"
-                      x={mx}
-                      y={my - 8}
+                      x={geometry.mx}
+                      y={geometry.my - 5}
                       textAnchor="middle"
                     >
                       {edge.type}
@@ -138,8 +228,8 @@ export function GraphPanel({ model }: GraphPanelProps) {
                     }
                   }}
                 >
-                  <circle r="20" />
-                  <text textAnchor="middle" y="36">
+                  <circle r="22" />
+                  <text textAnchor="middle" y="38">
                     {node.label.length > 16
                       ? `${node.label.slice(0, 14)}…`
                       : node.label}

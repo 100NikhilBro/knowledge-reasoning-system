@@ -1,14 +1,17 @@
 import { StatusIndicator } from "./StatusIndicator";
 import type { HealthStatus } from "../types/reasoning";
+import type { ThemeMode } from "../lib/theme";
 
 const GITHUB_REPO_URL =
   "https://github.com/100NikhilBro/knowledge-reasoning-system";
 
 interface HeaderProps {
   health: HealthStatus;
+  theme: ThemeMode;
+  onToggleTheme: () => void;
 }
 
-export function Header({ health }: HeaderProps) {
+export function Header({ health, theme, onToggleTheme }: HeaderProps) {
   return (
     <header className="header">
       <div className="brand">
@@ -23,6 +26,22 @@ export function Header({ health }: HeaderProps) {
         </div>
       </div>
       <div className="header-meta">
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={onToggleTheme}
+          aria-label={
+            theme === "dark"
+              ? "Switch to light theme"
+              : "Switch to dark theme"
+          }
+          aria-pressed={theme === "light"}
+        >
+          <span className="theme-toggle-icon" aria-hidden="true">
+            {theme === "dark" ? "☀" : "☾"}
+          </span>
+          <span>{theme === "dark" ? "Light" : "Dark"}</span>
+        </button>
         <a
           className="github-link"
           href={GITHUB_REPO_URL}

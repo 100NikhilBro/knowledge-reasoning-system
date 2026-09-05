@@ -48,12 +48,25 @@ implements ReasoningPlanner {
       "single-hop";
 
     /*
-     * Relationship-between queries must NOT fall through to multi-hop via
-     * the generic " and " heuristic — that expands unrelated neighbors.
+     * Direct endpoint-pair asks must stay on single-hop with an exact
+     * edge requirement — never treat a shared hub as a direct edge.
      */
-    if (relationshipBetween) {
+    if (
+      relationshipBetween &&
+      relationshipBetween.mode === "direct"
+    ) {
 
       strategy = "single-hop";
+
+    }
+
+    /*
+     * Connected / explicit-bridge pair asks need multi-hop so a shared
+     * hub (Typing ← Proposal → Readability) can be gathered.
+     */
+    else if (relationshipBetween) {
+
+      strategy = "multi-hop";
 
     }
 
@@ -117,6 +130,12 @@ implements ReasoningPlanner {
 
     }
 
+    const usesMultiHopPair =
+      Boolean(
+        relationshipBetween &&
+        relationshipBetween.mode !== "direct"
+      );
+
     const plan: ReasoningPlan = {
 
       strategy,
@@ -133,7 +152,7 @@ implements ReasoningPlanner {
 
         strategy === "multi-hop"
 
-          ? (pathQuery ? 2 : 3)
+          ? (pathQuery || usesMultiHopPair ? 2 : 3)
 
           : 1
 
@@ -155,20 +174,14 @@ implements ReasoningPlanner {
     }
 
     if (
-      focusRelationships &&
-      strategy === "multi-hop" &&
-      !pathQuery
+      relationshipBetween &&
+      relationshipBetween.mode === "direct"
     ) {
-      /*
-       * Non-path multi-hop with focuses: keep focuses unset so MultiHop
-       * can traverse freely; path queries similarly leave focuses unset.
-       */
-    }
 
-    if (relationshipBetween) {
-
-      plan.requireRelationshipBetween =
-        relationshipBetween;
+      plan.requireRelationshipBetween = {
+        left: relationshipBetween.left,
+        right: relationshipBetween.right
+      };
 
     }
 

@@ -89,7 +89,20 @@ export {
 } from "./utils/relationship-attribution.js";
 
 export {
+  detectRelationshipBetweenQuery,
+  entityMatchesPhrase,
+  queryRequestsDirectRelationship
+} from "./utils/detect-relationship-between-query.js";
+
+export type {
+  RelationshipBetweenMode,
+  RelationshipBetweenQuery
+} from "./utils/detect-relationship-between-query.js";
+
+export {
   classifyRelationalSupport,
+  contextHasConnectingEdge,
+  contextHasSharedHubBridge,
   detectUnmappedRelationRequest
 } from "./utils/classify-relational-support.js";
 

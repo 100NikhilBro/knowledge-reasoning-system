@@ -370,14 +370,23 @@ function missingRelationshipClause(
 
   if (
     missing.length === 1 &&
-    missing[0] === "CONNECTED"
+    (
+      missing[0] === "CONNECTED" ||
+      missing[0] === "DIRECT" ||
+      missing[0] === "BRIDGE"
+    )
   ) {
     return RELATIONSHIP_NOT_ESTABLISHED_CLAUSE;
   }
 
   const labels =
     missing
-      .filter(type => type !== "CONNECTED")
+      .filter(
+        type =>
+          type !== "CONNECTED" &&
+          type !== "DIRECT" &&
+          type !== "BRIDGE"
+      )
       .join(", ");
 
   if (!labels) {

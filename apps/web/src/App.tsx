@@ -24,7 +24,7 @@ import { RelationshipPath } from "./components/RelationshipPath";
 import {
   collectGroundedEvidence,
   deriveGraphFromResult,
-  deriveRelationshipPath
+  deriveRelationshipView
 } from "./lib/graph-from-result";
 import type {
   HealthStatus,
@@ -120,7 +120,7 @@ export function App() {
   );
 
   const path = useMemo(
-    () => deriveRelationshipPath(result),
+    () => deriveRelationshipView(result),
     [result]
   );
 
@@ -165,7 +165,7 @@ export function App() {
         {!loading && result ? (
           <div className="result-stack">
             <AnswerPanel result={result} query={submittedQuery} />
-            <RelationshipPath hops={path} />
+            <RelationshipPath view={path} />
             <EvidencePanel evidence={evidence} />
             <ReasoningTraceView trace={result.trace} />
             <GraphPanel model={graph} />
