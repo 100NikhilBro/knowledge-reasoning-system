@@ -15,6 +15,46 @@ import {
 } from "../utils/detect-relationship-between-query.js";
 
 /**
+ * Endpoint retention for ungrounded relationship-between queries.
+ * Uses id/label/properties only — not document source — so a shared
+ * corpus filename cannot make every entity look like both endpoints.
+ */
+function entityMatchesEndpoint(
+  entity: {
+    id: string;
+    label: string;
+    properties?: Record<string, unknown>;
+  },
+  phrase: string
+): boolean {
+
+  const needle =
+    phrase.toLowerCase().replace(/[^\w]/g, "");
+
+  if (!needle) {
+    return false;
+  }
+
+  const haystack =
+    [
+      entity.id,
+      entity.label,
+      ...Object.values(entity.properties ?? {})
+    ]
+      .filter(
+        value =>
+          typeof value === "string" ||
+          typeof value === "number"
+      )
+      .join(" ")
+      .toLowerCase()
+      .replace(/[^\w]/g, "");
+
+  return haystack.includes(needle);
+
+}
+
+/**
  * Default path: pass collected evidence through unchanged.
  *
  * When the planner sets focusRelationships, expand focused relationship
@@ -102,8 +142,20 @@ implements ReasoningStrategy {
     }
 
     if (!focusedHit) {
-      // Focused relationship type was requested but not grounded.
-      return { evidence: [] };
+      /*
+       * Keep seed entities without inventing the missing focused edge.
+       * Answer synthesis will bound "relationship not established".
+       */
+      return {
+        evidence: evidence.evidence.map(item => ({
+          entity: item.entity,
+          score: item.score,
+          source: item.source,
+          ...(item.metadata
+            ? { metadata: item.metadata }
+            : {})
+        }))
+      };
     }
 
     const focusedIds =
@@ -313,7 +365,35 @@ implements ReasoningStrategy {
     }
 
     if (grounded.length === 0) {
-      return { evidence: [] };
+      /*
+       * No connecting edge. Retain endpoint entities that match either
+       * side of the query so synthesis can report relationship-not-established
+       * instead of looking identical to "no information".
+       */
+      const endpoints =
+        evidence.evidence
+          .filter(item =>
+            entityMatchesEndpoint(
+              item.entity,
+              pair.left
+            ) ||
+            entityMatchesEndpoint(
+              item.entity,
+              pair.right
+            )
+          )
+          .map(item => ({
+            entity: item.entity,
+            score: item.score,
+            source: item.source,
+            ...(item.metadata
+              ? { metadata: item.metadata }
+              : {})
+          }));
+
+      return {
+        evidence: endpoints
+      };
     }
 
     // Deterministic dedupe by entity id (keep first / higher score).

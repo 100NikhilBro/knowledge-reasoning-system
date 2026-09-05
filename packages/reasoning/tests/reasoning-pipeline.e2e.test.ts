@@ -664,7 +664,7 @@ describe("End-to-end reasoning pipeline", () => {
 
   });
 
-  it("fails closed for explanation when focused relationships are missing", async () => {
+  it("bounds explanation when focused relationships are missing", async () => {
 
     const pep =
       makeEvidence(
@@ -686,11 +686,19 @@ describe("End-to-end reasoning pipeline", () => {
     expect(pipeline.plan?.strategy)
       .toBe("explanation");
 
-    expect(pipeline.expanded?.evidence)
-      .toEqual([]);
+    expect(pipeline.expanded?.evidence.map(item => item.entity.id))
+      .toEqual(["proposal:PEP-484"]);
 
-    expect(result.answer).toBe("");
+    expect(result.answer).toMatch(/Type Hints/i);
+    expect(result.answer).toMatch(
+      /does not establish the requested relationship/i
+    );
     expect(result.confidence).toBe(0);
+    expect(
+      result.trace.steps.some(step =>
+        step.evidence.some(item => item.relationship)
+      )
+    ).toBe(false);
 
   });
 
@@ -969,8 +977,10 @@ describe("End-to-end reasoning pipeline", () => {
 
       });
 
-    expect(result.answer).toContain("Proposal: Type Hints");
-    expect(result.answer).toMatch(
+    expect(result.answer).toMatch(/Type Hints/i);
+    expect(result.answer).toMatch(/proposal/i);
+    expect(result.answer).not.toMatch(/Proposal:\s*Type Hints/);
+    expect(result.answer).not.toMatch(
       /available evidence does not support additional claims/i
     );
     expect(result.answer).not.toMatch(/Fabricated/i);

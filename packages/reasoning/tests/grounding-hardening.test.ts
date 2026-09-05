@@ -201,6 +201,9 @@ describe("LLM grounding hardening", () => {
 
     expect(outcome.report.accepted).toBe(true);
     expect(outcome.result.answer).toMatch(
+      /Type Hints introduced Typing|Type Hints was proposed by/i
+    );
+    expect(outcome.result.answer).not.toMatch(
       /available evidence does not support additional claims/i
     );
 
@@ -308,8 +311,10 @@ describe("LLM grounding hardening", () => {
       });
 
     expect(outcome.report.accepted).toBe(true);
-    expect(outcome.result.answer).toContain("Feature: Typing");
     expect(outcome.result.answer).toMatch(
+      /Type Hints introduced Typing|Feature: Typing/i
+    );
+    expect(outcome.result.answer).not.toMatch(
       /available evidence does not support additional claims/i
     );
     expect(outcome.result.answer).not.toMatch(/List\[int\]|Dict\[str/);

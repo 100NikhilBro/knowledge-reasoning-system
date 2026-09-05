@@ -1,4 +1,5 @@
 import type {
+  Evidence,
   ReasoningResult,
   AnswerExplanation
 } from "@knowledge/shared";
@@ -34,7 +35,9 @@ import {
 } from "../utils/build-answer-explanation.js";
 
 import {
-  buildPartialGroundedAnswer
+  buildPartialGroundedAnswer,
+  buildRelationshipNotEstablishedAnswer,
+  detectUnsupportedCausalRemainder
 } from "../utils/build-partial-grounded-answer.js";
 
 import {
@@ -42,9 +45,16 @@ import {
 } from "../utils/is-generated-answer-grounded.js";
 
 import {
-  causalClaimsAreGrounded,
-  relationalQueryIsSupported
+  causalClaimsAreGrounded
 } from "../utils/relational-claim-grounding.js";
+
+import {
+  relationshipAttributionIsGrounded
+} from "../utils/relationship-attribution.js";
+
+import {
+  classifyRelationalSupport
+} from "../utils/classify-relational-support.js";
 
 import {
   computeGroundedAnswerConfidence,
@@ -84,8 +94,81 @@ function safeEmptyResult(): ReasoningResult {
 }
 
 /**
+ * Keep entity provenance but drop edge attachments so a missing
+ * requested relation cannot be visualized via unrelated edges.
+ */
+function evidenceWithoutRelationships(
+  evidence: Evidence[]
+): Evidence[] {
+
+  return evidence.map(item => {
+
+    if (!item.relationship) {
+      return item;
+    }
+
+    const {
+      relationship: _relationship,
+      ...rest
+    } = item;
+
+    return rest;
+
+  });
+
+}
+
+/**
+ * Entities found, requested relationship absent.
+ * Confidence stays 0 so public confidence cannot imply the missing edge.
+ */
+function safeRelationshipNotEstablishedResult(
+  context: ReasoningContext
+): ReasoningResult {
+
+  const answer =
+    buildRelationshipNotEstablishedAnswer(context);
+
+  const entityOnlyEvidence =
+    evidenceWithoutRelationships(context.evidence);
+
+  const entityContext: ReasoningContext = {
+    ...context,
+    evidence: entityOnlyEvidence
+  };
+
+  const explanation =
+    buildAnswerExplanation(answer, entityContext);
+
+  return {
+
+    answer,
+
+    confidence: 0,
+
+    citations: context.items.map(item => ({
+      entityId: item.entityId,
+      source: item.source
+    })),
+
+    trace: buildTrace({
+      evidence: entityOnlyEvidence,
+      comparison: context.comparison
+    }),
+
+    explanation,
+
+    ...(context.comparison !== undefined
+      ? { comparison: context.comparison }
+      : {})
+
+  };
+
+}
+
+/**
  * When generation invents unsupported claims but evidence exists,
- * return grounded facts plus an explicit insufficiency clause.
+ * return grounded facts plus an explicit insufficiency / partial bound.
  * Never invents domain facts. Empty evidence still fail-closes to empty.
  * Confidence is recomputed (partial) — never retains an inflated generator score.
  */
@@ -99,13 +182,21 @@ function safePartialGroundedResult(
   const explanation =
     buildAnswerExplanation(answer, context);
 
+  const support =
+    classifyRelationalSupport(
+      context.query,
+      context
+    );
+
   const confidence =
-    computePartialGroundedConfidence({
-      evidence: context.evidence,
-      ...(context.comparison !== undefined
-        ? { comparison: context.comparison }
-        : {})
-    });
+    support.kind === "relationship_missing"
+      ? 0
+      : computePartialGroundedConfidence({
+          evidence: context.evidence,
+          ...(context.comparison !== undefined
+            ? { comparison: context.comparison }
+            : {})
+        });
 
   return {
 
@@ -258,28 +349,59 @@ implements AnswerVerifier {
 
     }
 
-    if (
-      !relationalQueryIsSupported(
+    const relationalSupport =
+      classifyRelationalSupport(
         context.query,
         context
-      )
+      );
+
+    if (
+      relationalSupport.kind === "relationship_missing"
     ) {
 
       reasons.push(
-        "Relational or causal query lacks relationship-backed evidence"
+        "Requested relationship is not established by grounded evidence"
       );
 
       return {
 
         result:
-          safeEmptyResult(),
+          safeRelationshipNotEstablishedResult(
+            context
+          ),
 
         report: {
 
-          accepted: false,
+          accepted: true,
 
-          rejectedCitations:
-            result.citations ?? [],
+          rejectedCitations: [],
+
+          reasons
+
+        }
+
+      };
+
+    }
+
+    if (relationalSupport.kind === "partial") {
+
+      reasons.push(
+        "Only part of the requested relational claims are established"
+      );
+
+      return {
+
+        result:
+          safePartialGroundedResult(
+            context
+          ),
+
+        report: {
+
+          accepted: true,
+
+          rejectedCitations: [],
 
           reasons
 
@@ -321,6 +443,42 @@ implements AnswerVerifier {
 
     }
 
+    const unsupportedCausal =
+      detectUnsupportedCausalRemainder(
+        context.query,
+        context
+      );
+
+    if (
+      unsupportedCausal &&
+      !/does not establish/i.test(result.answer)
+    ) {
+
+      reasons.push(
+        "Unsupported causal remainder bounded by grounded evidence"
+      );
+
+      return {
+
+        result:
+          safePartialGroundedResult(
+            context
+          ),
+
+        report: {
+
+          accepted: true,
+
+          rejectedCitations: [],
+
+          reasons
+
+        }
+
+      };
+
+    }
+
     if (
       !causalClaimsAreGrounded(
         result.answer,
@@ -330,6 +488,38 @@ implements AnswerVerifier {
 
       reasons.push(
         "Causal claims are not supported by relationship evidence; replaced with grounded partial answer"
+      );
+
+      return {
+
+        result:
+          safePartialGroundedResult(
+            context
+          ),
+
+        report: {
+
+          accepted: true,
+
+          rejectedCitations: [],
+
+          reasons
+
+        }
+
+      };
+
+    }
+
+    if (
+      !relationshipAttributionIsGrounded(
+        result.answer,
+        context
+      )
+    ) {
+
+      reasons.push(
+        "Relationship attribution does not match grounded edge direction; replaced with grounded partial answer"
       );
 
       return {

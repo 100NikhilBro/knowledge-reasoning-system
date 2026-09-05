@@ -76,8 +76,27 @@ export {
 
 export {
   buildPartialGroundedAnswer,
-  INSUFFICIENT_EVIDENCE_CLAUSE
+  buildIdentityGroundedAnswer,
+  buildRelationalGroundedAnswer,
+  buildRelationshipNotEstablishedAnswer,
+  detectUnsupportedCausalRemainder,
+  INSUFFICIENT_EVIDENCE_CLAUSE,
+  RELATIONSHIP_NOT_ESTABLISHED_CLAUSE
 } from "./utils/build-partial-grounded-answer.js";
+
+export {
+  relationshipAttributionIsGrounded
+} from "./utils/relationship-attribution.js";
+
+export {
+  classifyRelationalSupport,
+  detectUnmappedRelationRequest
+} from "./utils/classify-relational-support.js";
+
+export type {
+  RelationalSupport,
+  RelationalSupportKind
+} from "./utils/classify-relational-support.js";
 
 export {
   buildGroundedCorpus,

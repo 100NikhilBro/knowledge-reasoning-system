@@ -179,7 +179,7 @@ describe("unsupported relationship-between fail-closed", () => {
     expect(plan.focusRelationships).toBeUndefined();
   });
 
-  it("returns no evidence when the requested pair is ungrounded", async () => {
+  it("returns endpoint entities without inventing an edge when the pair is ungrounded", async () => {
     const graph = {
       findNeighbors: vi.fn(async () => pepNeighbors)
     } as unknown as GraphTraversalService;
@@ -206,7 +206,12 @@ describe("unsupported relationship-between fail-closed", () => {
       }
     );
 
-    expect(expanded.evidence).toEqual([]);
+    expect(
+      expanded.evidence.map(item => item.entity.id)
+    ).toEqual(["proposal:PEP-484"]);
+    expect(
+      expanded.evidence.every(item => !item.relationship)
+    ).toBe(true);
   });
 
   it("does not substitute unrelated PEP neighbors as the answer", async () => {

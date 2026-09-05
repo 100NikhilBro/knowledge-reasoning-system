@@ -484,7 +484,11 @@ describe("complex reasoning matrix", () => {
         context: withoutRels
       });
 
-    expect(rejected.result.answer).toBe("");
+    expect(rejected.result.answer).toMatch(/Type Hints \(Proposal\)|Proposal/i);
+    expect(rejected.result.answer).toMatch(
+      /does not establish the requested relationship/i
+    );
+    expect(rejected.result.answer).not.toMatch(/quantum/i);
     expect(rejected.result.confidence).toBe(0);
   });
 
@@ -606,7 +610,11 @@ describe("complex reasoning matrix", () => {
       });
 
     expect(outcome.result.confidence).toBe(0);
-    expect(outcome.result.answer).toBe("");
+    expect(outcome.result.answer).toMatch(/Type Hints \(Proposal\)|Proposal/i);
+    expect(outcome.result.answer).toMatch(
+      /does not establish the requested relationship/i
+    );
+    expect(outcome.result.answer).not.toMatch(/quantum networking/i);
   });
 
   it("grounded how/why answers keep confidence in [0,1]", async () => {

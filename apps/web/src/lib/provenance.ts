@@ -74,7 +74,12 @@ function normalizeSources(
 }
 
 /**
- * Public result grounding classification from answer + confidence only.
+ * Public result grounding classification from answer + confidence.
+ * No new API field required:
+ * - empty + conf 0 → fail_closed (no information)
+ * - non-empty + conf 0 → bounded (entities found, relationship not established)
+ * - answer bounds missing claims → partial
+ * - otherwise grounded
  */
 export function classifyGroundingState(
   result: ReasoningResult
@@ -83,6 +88,17 @@ export function classifyGroundingState(
 
   if (answer.length === 0) {
     return result.confidence === 0 ? "fail_closed" : "empty";
+  }
+
+  if (result.confidence === 0) {
+    return "bounded";
+  }
+
+  if (
+    /does not establish/i.test(answer) ||
+    /requested relationship/i.test(answer)
+  ) {
+    return "partial";
   }
 
   return "grounded";

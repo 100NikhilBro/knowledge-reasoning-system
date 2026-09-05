@@ -129,7 +129,10 @@ describe("grounding prompt + serialization", () => {
       /Do NOT invent/i
     );
     expect(GROUNDING_SYSTEM_PROMPT).toMatch(
-      /only supports part of the query/i
+      /Source–Relationship–Target|Source-Relationship-Target/i
+    );
+    expect(GROUNDING_SYSTEM_PROMPT).toMatch(
+      /Do NOT invent motivation, purpose, intent/i
     );
 
   });
@@ -555,10 +558,9 @@ describe("LlmAnswerGenerator + verification", () => {
       });
 
     expect(outcome.report.accepted).toBe(true);
-    expect(outcome.result.answer).toContain("Proposal: Type Hints");
-    expect(outcome.result.answer).toMatch(
-      /available evidence does not support additional claims/i
-    );
+    expect(outcome.result.answer).toMatch(/Type Hints/i);
+    expect(outcome.result.answer).toMatch(/proposal/i);
+    expect(outcome.result.answer).not.toMatch(/Proposal:\s*Type Hints/);
     expect(outcome.result.answer).not.toMatch(/Quantum|PEP-999/i);
     expect(outcome.result.citations[0]?.entityId).toBe(
       "proposal:PEP-484"

@@ -45,7 +45,8 @@ function entityEvidence(
 }
 
 const groundedResult: ReasoningResult = {
-  answer: "Proposal: Type Hints\nFeature: Typing",
+  answer:
+    "PEP-484 (Type Hints) is a proposal. Type Hints introduced Typing.",
   confidence: 0.64,
   citations: [
     {
@@ -76,15 +77,15 @@ const groundedResult: ReasoningResult = {
       },
       {
         description:
-          "Selected Feature: Typing via ADDRESSES (feature:typing → concern:readability)",
+          "Selected Proposal: Type Hints via ADDRESSES (proposal:PEP-484 → concern:readability)",
         evidence: [
           entityEvidence({
-            id: "feature:typing",
-            label: "Typing",
-            type: "Feature",
+            id: "proposal:PEP-484",
+            label: "Type Hints",
+            type: "Proposal",
             channel: "graph",
             relationship: {
-              from: "feature:typing",
+              from: "proposal:PEP-484",
               to: "concern:readability",
               type: "ADDRESSES",
               confidence: 1
@@ -106,7 +107,8 @@ const groundedResult: ReasoningResult = {
     ]
   },
   explanation: {
-    answer: "Proposal: Type Hints\nFeature: Typing",
+    answer:
+      "PEP-484 (Type Hints) is a proposal. Type Hints introduced Typing.",
     reasoning: [
       "Evidence used: 3",
       "Grounded on proposal:PEP-484 from pep-484.md"
@@ -184,6 +186,14 @@ describe("Knowledge Reasoning Web UI", () => {
       })
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/Reasoning query/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: /Open Knowledge Reasoning System on GitHub/i
+      })
+    ).toHaveAttribute(
+      "href",
+      "https://github.com/100NikhilBro/knowledge-reasoning-system"
+    );
   });
 
   it("A: successful grounded answer", async () => {
@@ -195,7 +205,7 @@ describe("Knowledge Reasoning Web UI", () => {
       await screen.findByRole("heading", { name: /Grounded response/i })
     ).toBeInTheDocument();
     expect(
-      screen.getAllByText(/Proposal: Type Hints/i).length
+      screen.getAllByText(/PEP-484 \(Type Hints\) is a proposal/i).length
     ).toBeGreaterThan(0);
     expect(screen.getByText("Grounded")).toBeInTheDocument();
   });

@@ -15,6 +15,33 @@ export function AnswerPanel({ result, query }: AnswerPanelProps) {
   const grounding = classifyGroundingState(result);
   const verified = isVerifiedAppearance(result);
   const failClosed = grounding === "fail_closed";
+  const bounded = grounding === "bounded";
+  const partial = grounding === "partial";
+
+  const title =
+    failClosed
+      ? "No grounded answer found"
+      : bounded
+        ? "Relationship not established"
+        : partial
+          ? "Partially grounded response"
+          : "Grounded response";
+
+  const statusLabel =
+    failClosed
+      ? "Fail-closed"
+      : bounded
+        ? "Not established"
+        : partial
+          ? "Partial"
+          : "Grounded";
+
+  const statusTone =
+    failClosed || bounded
+      ? "warn"
+      : partial
+        ? "muted"
+        : "ok";
 
   return (
     <section
@@ -26,16 +53,13 @@ export function AnswerPanel({ result, query }: AnswerPanelProps) {
         <div>
           <p className="panel-kicker">Answer</p>
           <h2 className="panel-title" id="answer-title">
-            {failClosed ? "No grounded answer found" : "Grounded response"}
+            {title}
           </h2>
         </div>
 
         <div className="answer-status-row" aria-label="Answer status">
-          <span
-            className="status-chip"
-            data-tone={failClosed ? "warn" : "ok"}
-          >
-            {failClosed ? "Fail-closed" : "Grounded"}
+          <span className="status-chip" data-tone={statusTone}>
+            {statusLabel}
           </span>
           <span
             className="status-chip"

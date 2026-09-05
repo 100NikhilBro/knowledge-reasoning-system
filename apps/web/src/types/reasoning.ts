@@ -81,4 +81,6 @@ export type ProvenanceChannel = "graph" | "vector" | "hybrid" | "unknown";
 export type ResultGroundingState =
   | "grounded"
   | "fail_closed"
-  | "empty";
+  | "empty"
+  | "bounded"
+  | "partial";

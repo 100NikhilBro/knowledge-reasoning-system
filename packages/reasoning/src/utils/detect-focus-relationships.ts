@@ -20,7 +20,9 @@ export function detectFocusRelationships(
     normalized.includes("who proposed") ||
     normalized.includes("proposed by") ||
     normalized.includes("who authored") ||
-    normalized.includes("authored by")
+    normalized.includes("authored by") ||
+    normalized.includes("who did it come from") ||
+    normalized.includes("where did it come from")
   ) {
     focuses.push("PROPOSED_BY");
   }

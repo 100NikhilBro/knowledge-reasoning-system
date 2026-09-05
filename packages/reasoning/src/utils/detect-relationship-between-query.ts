@@ -43,8 +43,14 @@ export function detectRelationshipBetweenQuery(
 }
 
 /**
- * Loose entity↔phrase match for relationship-between grounding checks.
- * Uses id/label/source/properties only — no external knowledge.
+ * Entity↔phrase match for relationship grounding checks.
+ *
+ * Uses id, label, and string/number properties only — not document
+ * `source` — so a shared corpus filename cannot make every entity look
+ * like a coded topic (e.g. pep-484.md matching "PEP-484").
+ *
+ * Matching is boundary-aware on original text plus compact equality, so
+ * "Type Hints" does not falsely match the phrase "Typing".
  */
 export function entityMatchesPhrase(
   entity: {
@@ -57,29 +63,78 @@ export function entityMatchesPhrase(
 ): boolean {
 
   const needle =
-    compact(phrase);
+    phrase.trim();
 
   if (!needle) {
     return false;
   }
 
-  const haystack =
-    compact(
-      [
-        entity.id,
-        entity.label,
-        entity.source,
-        ...Object.values(entity.properties ?? {})
-      ]
-        .filter(
-          value =>
-            typeof value === "string" ||
-            typeof value === "number"
-        )
-        .join(" ")
-    );
+  const fields: string[] = [
+    entity.id,
+    entity.label,
+    ...Object.values(entity.properties ?? {})
+      .filter(
+        value =>
+          typeof value === "string" ||
+          typeof value === "number"
+      )
+      .map(String)
+  ];
 
-  return haystack.includes(needle);
+  return fields.some(field => textMatchesPhrase(field, needle));
+
+}
+
+function textMatchesPhrase(
+  text: string,
+  phrase: string
+): boolean {
+
+  const normalizedText =
+    text.toLowerCase();
+
+  const normalizedPhrase =
+    phrase.toLowerCase().trim();
+
+  if (!normalizedPhrase) {
+    return false;
+  }
+
+  if (normalizedText === normalizedPhrase) {
+    return true;
+  }
+
+  if (normalizedText.includes(normalizedPhrase)) {
+    const index =
+      normalizedText.indexOf(normalizedPhrase);
+
+    const beforeOk =
+      index === 0 ||
+      /[^a-z0-9]/i.test(normalizedText.charAt(index - 1));
+
+    const afterIndex =
+      index + normalizedPhrase.length;
+
+    const afterOk =
+      afterIndex >= normalizedText.length ||
+      /[^a-z0-9]/i.test(normalizedText.charAt(afterIndex));
+
+    if (beforeOk && afterOk) {
+      return true;
+    }
+  }
+
+  const compactText =
+    compact(text);
+
+  const compactPhrase =
+    compact(phrase);
+
+  return (
+    compactText.length > 0 &&
+    compactPhrase.length > 0 &&
+    compactText === compactPhrase
+  );
 
 }
 

@@ -96,6 +96,20 @@ describe("detectFocusRelationships", () => {
     ).toEqual(["PROPOSED_BY"]);
   });
 
+  it("detects PROPOSED_BY for come-from phrasing", () => {
+    expect(
+      detectFocusRelationships(
+        "What did PEP-484 introduce, who did it come from, and what concern did it address?"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        "PROPOSED_BY",
+        "INTRODUCES",
+        "ADDRESSES"
+      ])
+    );
+  });
+
   it("detects ADDRESSES for concern queries", () => {
     expect(
       detectFocusRelationships(
