@@ -25,6 +25,11 @@ export interface Evidence {
   score: number;
   source: string;
   relationship?: KnowledgeRelationship;
+  /**
+   * Optional retrieval provenance from the backend (e.g. hybrid sources).
+   * Never treated as public answer confidence.
+   */
+  metadata?: Record<string, unknown>;
 }
 
 export interface ReasoningStep {
@@ -70,3 +75,10 @@ export interface PublicApiError {
 }
 
 export type HealthStatus = "ok" | "down" | "unknown";
+
+export type ProvenanceChannel = "graph" | "vector" | "hybrid" | "unknown";
+
+export type ResultGroundingState =
+  | "grounded"
+  | "fail_closed"
+  | "empty";

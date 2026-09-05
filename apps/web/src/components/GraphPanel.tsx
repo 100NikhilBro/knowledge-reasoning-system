@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { GraphNode, GraphViewModel } from "../lib/graph-from-result";
+import { ProvenanceBadge } from "./ProvenanceBadge";
 
 interface GraphPanelProps {
   model: GraphViewModel;
@@ -7,7 +8,7 @@ interface GraphPanelProps {
 
 function layoutNodes(nodes: GraphNode[]) {
   const width = 640;
-  const height = 240;
+  const height = 260;
   const cx = width / 2;
   const cy = height / 2;
   const radius = Math.min(width, height) * 0.34;
@@ -41,58 +42,82 @@ export function GraphPanel({ model }: GraphPanelProps) {
     positioned.find((node) => node.id === selectedId) ?? null;
 
   const nodeById = useMemo(() => {
-    const map = new Map(positioned.map((node) => [node.id, node]));
-    return map;
+    return new Map(positioned.map((node) => [node.id, node]));
   }, [positioned]);
 
   return (
     <section className="panel" aria-labelledby="graph-title">
       <div className="panel-header">
         <div>
-          <p className="panel-kicker">05 // Graph</p>
+          <p className="panel-kicker">Graph</p>
           <h2 className="panel-title" id="graph-title">
-            Knowledge graph view
+            Evidence graph
           </h2>
         </div>
       </div>
 
       {model.nodes.length === 0 ? (
         <p className="muted">
-          Graph visualization needs entity evidence from the reasoning
-          response. No dedicated graph API is exposed — nodes appear here when
-          the `/reason` trace includes grounded entities.
+          Entities appear here when the `/reason` trace includes grounded
+          evidence. Edges are drawn only from real relationships in the
+          response.
         </p>
       ) : (
         <>
           {!model.hasRelationshipData ? (
             <p className="muted" style={{ marginBottom: "0.75rem" }}>
-              Showing entities from grounded evidence. Relationship edges are
-              drawn only when the response includes relationship data.
+              Showing entities from grounded evidence. No relationship edges
+              were present in this result.
             </p>
           ) : null}
 
           <div className="graph-canvas">
             <svg
               className="graph-svg"
-              viewBox="0 0 640 240"
+              viewBox="0 0 640 260"
               role="img"
               aria-label="Entity graph derived from reasoning evidence"
             >
+              <defs>
+                <marker
+                  id="graph-arrow"
+                  markerWidth="7"
+                  markerHeight="7"
+                  refX="6"
+                  refY="3"
+                  orient="auto"
+                >
+                  <path d="M0,0 L7,3 L0,6 Z" fill="currentColor" />
+                </marker>
+              </defs>
+
               {model.edges.map((edge) => {
                 const from = nodeById.get(edge.from);
                 const to = nodeById.get(edge.to);
                 if (!from || !to) {
                   return null;
                 }
+                const mx = (from.x + to.x) / 2;
+                const my = (from.y + to.y) / 2;
                 return (
-                  <line
-                    key={edge.id}
-                    className="graph-edge"
-                    x1={from.x}
-                    y1={from.y}
-                    x2={to.x}
-                    y2={to.y}
-                  />
+                  <g key={edge.id} className="graph-edge-group">
+                    <line
+                      className="graph-edge"
+                      x1={from.x}
+                      y1={from.y}
+                      x2={to.x}
+                      y2={to.y}
+                      markerEnd="url(#graph-arrow)"
+                    />
+                    <text
+                      className="graph-edge-label"
+                      x={mx}
+                      y={my - 8}
+                      textAnchor="middle"
+                    >
+                      {edge.type}
+                    </text>
+                  </g>
                 );
               })}
 
@@ -113,10 +138,10 @@ export function GraphPanel({ model }: GraphPanelProps) {
                     }
                   }}
                 >
-                  <circle r="18" />
-                  <text textAnchor="middle" y="32">
-                    {node.label.length > 14
-                      ? `${node.label.slice(0, 12)}…`
+                  <circle r="20" />
+                  <text textAnchor="middle" y="36">
+                    {node.label.length > 16
+                      ? `${node.label.slice(0, 14)}…`
                       : node.label}
                   </text>
                 </g>
@@ -126,11 +151,15 @@ export function GraphPanel({ model }: GraphPanelProps) {
 
           {selected ? (
             <div className="graph-detail" aria-live="polite">
-              <div>{selected.type}</div>
-              <div>{selected.label}</div>
-              <div>id: {selected.id}</div>
-              <div>source: {selected.source}</div>
-              <div>confidence: {selected.confidence}</div>
+              <div className="graph-detail-top">
+                <div>
+                  <div className="mono muted">{selected.type}</div>
+                  <div>{selected.label}</div>
+                </div>
+                <ProvenanceBadge channel={selected.provenance} />
+              </div>
+              <div className="mono muted">id: {selected.id}</div>
+              <div className="mono muted">source: {selected.source}</div>
             </div>
           ) : (
             <p className="muted" style={{ marginTop: "0.75rem" }}>

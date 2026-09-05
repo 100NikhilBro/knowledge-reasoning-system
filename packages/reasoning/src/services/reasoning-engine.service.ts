@@ -67,6 +67,10 @@ import {
   buildExplanationPipeline
 } from "../utils/build-explanation-pipeline.js";
 
+import {
+  filterCompatibleEvidence
+} from "../utils/query-evidence-compatibility.js";
+
 
 export class DefaultReasoningEngine
 implements ReasoningEngine {
@@ -224,6 +228,30 @@ implements ReasoningEngine {
 
 
       /*
+       * Step 4b
+       * Fail closed when retrieved evidence is not query-compatible
+       * (near-match / wrong-topic similarity must not ground answers).
+       */
+
+      const compatibleEvidence =
+        filterCompatibleEvidence(
+
+          request.query,
+
+          synthesized.evidence
+
+        );
+
+      const groundedEvidenceSet = {
+        evidence:
+          compatibleEvidence,
+        ...(synthesized.comparison !== undefined
+          ? { comparison: synthesized.comparison }
+          : {})
+      };
+
+
+      /*
        * Step 5
        * Build grounded context from verified evidence
        */
@@ -231,7 +259,7 @@ implements ReasoningEngine {
       const context =
         this.contextBuilder.build(
 
-          synthesized
+          groundedEvidenceSet
 
         );
 

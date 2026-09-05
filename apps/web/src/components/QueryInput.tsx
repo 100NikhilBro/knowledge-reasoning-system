@@ -1,7 +1,13 @@
-import type { FormEvent } from "react";
+import type { FormEvent, KeyboardEvent } from "react";
 import { ExampleQueries } from "./ExampleQueries";
 
-const EXAMPLES = ["What is PEP-484?", "What is typing?"];
+const EXAMPLES = [
+  "What is PEP-484?",
+  "Why was PEP-484 proposed?",
+  "How did PEP-484 address readability?",
+  "How is PEP-484 connected to type hints?",
+  "Who proposed PEP-484?"
+] as const;
 
 interface QueryInputProps {
   value: string;
@@ -21,13 +27,20 @@ export function QueryInput({
     onSubmit();
   }
 
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      event.preventDefault();
+      onSubmit();
+    }
+  }
+
   return (
-    <section className="panel" aria-labelledby="query-title">
+    <section className="panel query-panel" aria-labelledby="query-title">
       <div className="panel-header">
         <div>
-          <p className="panel-kicker">01 // Query</p>
+          <p className="panel-kicker">Query</p>
           <h2 className="panel-title" id="query-title">
-            Ask the knowledge graph
+            Ask a complex knowledge question
           </h2>
         </div>
       </div>
@@ -41,9 +54,10 @@ export function QueryInput({
           className="query-input"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder="Enter a grounded knowledge query…"
+          onKeyDown={handleKeyDown}
+          placeholder="Ask across entities, relationships, and multi-hop evidence…"
           disabled={loading}
-          rows={4}
+          rows={3}
         />
 
         <div className="query-actions">
@@ -52,14 +66,18 @@ export function QueryInput({
             className="button"
             disabled={loading || value.trim().length === 0}
           >
-            {loading ? "Reasoning…" : "Run reasoning"}
+            {loading ? "Reasoning…" : "Run"}
           </button>
-          <ExampleQueries
-            examples={EXAMPLES}
-            disabled={loading}
-            onSelect={onChange}
-          />
+          <span className="query-hint mono muted">
+            Ctrl/⌘ + Enter
+          </span>
         </div>
+
+        <ExampleQueries
+          examples={[...EXAMPLES]}
+          disabled={loading}
+          onSelect={onChange}
+        />
       </form>
     </section>
   );

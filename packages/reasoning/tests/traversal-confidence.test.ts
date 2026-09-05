@@ -91,13 +91,19 @@ describe(
 
         expect(
 
-          result[0].confidence
+          result[0].entity.confidence
 
         ).toBeCloseTo(
 
           1
 
         );
+
+        expect(
+
+          result[0].depth
+
+        ).toBe(0);
 
       }
 

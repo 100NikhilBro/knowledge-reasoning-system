@@ -26,6 +26,20 @@ import {
   calculateScore
 } from "../ranking/score.js";
 
+/**
+ * Tokens that must not keep a candidate via substring match alone
+ * (e.g. "is" matching inside "Type Hints").
+ */
+const GRAPH_STOP_TOKENS = new Set([
+  "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+  "of", "to", "for", "from", "in", "on", "at", "by", "with", "as",
+  "about", "into", "over", "after", "before", "between", "through",
+  "tell", "me", "what", "who", "whom", "whose", "which", "when", "where",
+  "why", "how", "does", "did", "do", "can", "could", "should", "would",
+  "will", "and", "or", "but", "not", "it", "its", "this", "that",
+  "these", "those", "please", "explain", "describe", "define"
+]);
+
 
 export class Neo4jGraphRetriever
 implements GraphRetriever {
@@ -192,7 +206,8 @@ implements GraphRetriever {
       )
       .filter(
         token =>
-          token.length > 1
+          token.length > 1 &&
+          !GRAPH_STOP_TOKENS.has(token)
       );
 
   }

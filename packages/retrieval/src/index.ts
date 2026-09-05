@@ -19,6 +19,14 @@ from "./errors/retrieval-error.js";
 export { mergeResults }
 from "./utils/merge-results.js";
 
+export { analyzeHybridQuery }
+from "./utils/analyze-hybrid-query.js";
+
+export type {
+  HybridPreference,
+  HybridQueryAnalysis
+} from "./utils/analyze-hybrid-query.js";
+
 export {
   createRetrievalServiceFromEnv
 } from "./factories/create-retrieval-service.js";

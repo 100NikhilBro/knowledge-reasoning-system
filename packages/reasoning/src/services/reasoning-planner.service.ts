@@ -9,7 +9,8 @@ import type {
 } from "../contracts/reasoning-planner.js";
 
 import {
-  detectFocusRelationships
+  detectFocusRelationships,
+  detectMultiHopPathQuery
 } from "../utils/detect-focus-relationships.js";
 
 import {
@@ -38,6 +39,11 @@ implements ReasoningPlanner {
         request.query
       );
 
+    const pathQuery =
+      detectMultiHopPathQuery(
+        request.query
+      );
+
     let strategy: ReasoningStrategy =
       "single-hop";
 
@@ -57,6 +63,16 @@ implements ReasoningPlanner {
 
     }
 
+    /*
+     * Path / chain questions need real multi-hop traversal so edges like
+     * INTRODUCES → ADDRESSES survive as a connected path.
+     */
+    else if (pathQuery) {
+
+      strategy = "multi-hop";
+
+    }
+
     else if (query.includes("why")) {
 
       strategy = "explanation";
@@ -65,15 +81,32 @@ implements ReasoningPlanner {
 
     /*
      * Compound questions that already name focused relationship types must
-     * stay on single-hop so focusRelationships is applied. The generic
-     * " and " / "both" heuristic otherwise selects multi-hop, which ignores
-     * focus and BFS-dumps neighbors (breaking RESULTS_IN / PROPOSED_BY etc.).
+     * stay on single-hop so focusRelationships is applied (with multi-pass
+     * focused expansion). The generic " and " / "both" heuristic otherwise
+     * selects multi-hop, which ignores focus and dumps neighbors.
      */
     else if (
       (
         query.includes(" and ") ||
         query.includes("both")
       ) &&
+      !(
+        focusRelationships &&
+        focusRelationships.length > 0
+      )
+    ) {
+
+      strategy = "multi-hop";
+
+    }
+
+    /*
+     * HOW without an explicit path cue but with relationship focuses stays
+     * on single-hop (focused expansion). HOW without focuses uses multi-hop
+     * so connected evidence can still be gathered.
+     */
+    else if (
+      query.includes("how") &&
       !(
         focusRelationships &&
         focusRelationships.length > 0
@@ -100,17 +133,36 @@ implements ReasoningPlanner {
 
         strategy === "multi-hop"
 
-          ? 3
+          ? (pathQuery ? 2 : 3)
 
           : 1
 
     };
 
-    if (focusRelationships) {
+    /*
+     * Explanation/how/compound still benefit from relationship focuses when
+     * detected — SingleHopStrategy applies them; MultiHop ignores focuses
+     * but keeps real edge provenance from traversal.
+     */
+    if (
+      focusRelationships &&
+      strategy !== "multi-hop"
+    ) {
 
       plan.focusRelationships =
         focusRelationships;
 
+    }
+
+    if (
+      focusRelationships &&
+      strategy === "multi-hop" &&
+      !pathQuery
+    ) {
+      /*
+       * Non-path multi-hop with focuses: keep focuses unset so MultiHop
+       * can traverse freely; path queries similarly leave focuses unset.
+       */
     }
 
     if (relationshipBetween) {

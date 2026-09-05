@@ -154,9 +154,11 @@ async findNeighbors(
     `
     MATCH (n:${label} { id: $id })-[r]-(neighbor)
 
-RETURN
-  r,
-  neighbor
+    RETURN
+      r,
+      neighbor,
+      startNode(r).id AS from,
+      endNode(r).id AS to
     `
     
     ,
@@ -188,9 +190,9 @@ return result.records.map(record => {
 
       record.get("r"),
 
-      graphId,
+      record.get("from"),
 
-      neighbor.id
+      record.get("to")
 
     );
 
@@ -288,7 +290,9 @@ async findSubgraph(
     RETURN
       n,
       r,
-      neighbor
+      neighbor,
+      startNode(r).id AS from,
+      endNode(r).id AS to
     `,
     {
       id: graphId
@@ -312,24 +316,12 @@ async findSubgraph(
     nodes.set(node.id, node);
     nodes.set(neighbor.id, neighbor);
 
-    // relationships.push({
-
-    //   from: node.id,
-
-    //   to: neighbor.id,
-
-    //   ...Neo4jRelationshipMapper.toRelationship(
-    //     record.get("r")
-    //   )
-
-    // });
-
     relationships.push(
 
   Neo4jRelationshipMapper.toKnowledgeRelationship(
     record.get("r"),
-    node.id,
-    neighbor.id
+    record.get("from"),
+    record.get("to")
   )
 
 );

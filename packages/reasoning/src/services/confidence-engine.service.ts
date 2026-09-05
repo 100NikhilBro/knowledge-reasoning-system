@@ -6,6 +6,16 @@ import type {
   ConfidenceEngine
 } from "../contracts/confidence-engine.js";
 
+import {
+  computeGroundedAnswerConfidence
+} from "../utils/compute-grounded-confidence.js";
+
+/**
+ * Public answer confidence engine.
+ *
+ * Returns grounded-answer confidence in [0, 1].
+ * Does not expose raw retrieval / graph ranking magnitudes.
+ */
 export class DefaultConfidenceEngine
 implements ConfidenceEngine {
 
@@ -15,37 +25,8 @@ implements ConfidenceEngine {
 
   ): Promise<number> {
 
-    const evidence =
-
-      evidenceSet.evidence;
-
-    if (evidence.length === 0) {
-
-      return 0;
-
-    }
-
-    const total =
-
-      evidence.reduce(
-
-        (sum, item) =>
-
-          sum + item.score,
-
-        0
-
-      );
-
-    return Number(
-
-      (
-        total /
-
-        evidence.length
-
-      ).toFixed(2)
-
+    return computeGroundedAnswerConfidence(
+      evidenceSet
     );
 
   }

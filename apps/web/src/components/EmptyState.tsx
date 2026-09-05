@@ -6,10 +6,10 @@ interface EmptyStateProps {
 
 const EXAMPLES = [
   "What is PEP-484?",
-  "Who proposed PEP-484?",
-  "What feature does PEP-484 introduce?",
-  "What decision resulted from PEP-484?",
-  "Who proposed PEP-484, what did it introduce, and what concern did it address?"
+  "Why was PEP-484 proposed?",
+  "How did PEP-484 address readability?",
+  "How is PEP-484 connected to type hints?",
+  "Who proposed PEP-484?"
 ] as const;
 
 export function EmptyState({ onSelectExample }: EmptyStateProps) {
@@ -18,14 +18,35 @@ export function EmptyState({ onSelectExample }: EmptyStateProps) {
       <div>
         <p className="panel-kicker">Workspace</p>
         <h2 className="panel-title" id="empty-title">
-          Ask a question over the indexed knowledge
+          Evidence-grounded reasoning
         </h2>
       </div>
       <p className="muted">
-        KRS answers from the indexed knowledge graph and vector store — not from
-        unrestricted model knowledge. Results include citations, evidence, and a
-        reasoning trace.
+        KRS answers from indexed graph and vector evidence. Unsupported
+        questions fail closed instead of inventing claims.
       </p>
+
+      <ol className="empty-pipeline" aria-label="Reasoning pipeline">
+        {[
+          "Question",
+          "Retrieval",
+          "Evidence",
+          "Relationships",
+          "Reasoning",
+          "Verification",
+          "Answer"
+        ].map((step, index, all) => (
+          <li key={step}>
+            <span>{step}</span>
+            {index < all.length - 1 ? (
+              <span className="empty-pipeline-arrow" aria-hidden="true">
+                →
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+
       <ExampleQueries
         examples={[...EXAMPLES]}
         onSelect={onSelectExample}

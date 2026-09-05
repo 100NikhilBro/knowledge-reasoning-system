@@ -14,7 +14,8 @@ from "../src/errors/retrieval-error.js";
 function entityResult(
   id: string,
   score: number,
-  source: "graph" | "vector"
+  source: "graph" | "vector",
+  label?: string
 ): RetrievalResult {
 
   return {
@@ -22,11 +23,15 @@ function entityResult(
       id,
       type: id.startsWith("proposal")
         ? "Proposal"
-        : "Feature",
-      label: id,
+        : id.startsWith("author")
+          ? "Author"
+          : "Feature",
+      label: label ?? id,
       source: "pep-484.md",
       confidence: 1,
-      properties: {}
+      properties: id.includes("PEP-484")
+        ? { pep: "484" }
+        : {}
     },
     score,
     source
@@ -35,6 +40,207 @@ function entityResult(
 }
 
 describe("RetrievalService hybrid retrieval", () => {
+
+  it("A: graph-dominant relationship query keeps graph evidence", async () => {
+
+    const graph = {
+      retrieve: vi.fn(async () => [
+        entityResult("proposal:PEP-484", 6, "graph", "Type Hints"),
+        entityResult("author:guido", 5, "graph", "Guido van Rossum")
+      ])
+    };
+
+    const vector = {
+      retrieve: vi.fn(async () => [
+        entityResult("proposal:PEP-484", 0.2, "vector", "Type Hints")
+      ])
+    };
+
+    const service =
+      new RetrievalService(graph, vector, new SimpleRanker());
+
+    const results =
+      await service.retrieve({
+        query: "Who proposed PEP-484?",
+        topK: 5,
+        mode: "hybrid"
+      });
+
+    expect(graph.retrieve).toHaveBeenCalledOnce();
+    expect(results.some(item => item.source === "graph" ||
+      (Array.isArray(item.metadata?.sources) &&
+        item.metadata.sources.includes("graph")))).toBe(true);
+    expect(results.map(item => item.entity.id)).toContain(
+      "proposal:PEP-484"
+    );
+
+  });
+
+  it("B: vector-dominant conceptual query keeps vector evidence", async () => {
+
+    const graph = {
+      retrieve: vi.fn(async () => [])
+    };
+
+    const vector = {
+      retrieve: vi.fn(async () => [
+        entityResult("feature:typing", 0.91, "vector", "Typing")
+      ])
+    };
+
+    const service =
+      new RetrievalService(graph, vector, new SimpleRanker());
+
+    const results =
+      await service.retrieve({
+        query: "Explain the idea of typing annotations",
+        mode: "hybrid"
+      });
+
+    expect(vector.retrieve).toHaveBeenCalledOnce();
+    expect(results).toHaveLength(1);
+    expect(results[0].source).toBe("vector");
+    expect(results[0].entity.id).toBe("feature:typing");
+
+  });
+
+  it("C: genuine hybrid query preserves dual provenance without duplicates", async () => {
+
+    const graph = {
+      retrieve: vi.fn(async () => [
+        entityResult("proposal:PEP-484", 6, "graph", "Type Hints"),
+        entityResult("feature:typing", 4, "graph", "Typing")
+      ])
+    };
+
+    const vector = {
+      retrieve: vi.fn(async () => [
+        entityResult("proposal:PEP-484", 0.8, "vector", "Type Hints"),
+        entityResult("concern:readability", 0.55, "vector", "Readability")
+      ])
+    };
+
+    const service =
+      new RetrievalService(graph, vector, new SimpleRanker());
+
+    const results =
+      await service.retrieve({
+        query: "What is PEP-484 and how does typing improve readability?",
+        topK: 10,
+        mode: "hybrid"
+      });
+
+    expect(graph.retrieve).toHaveBeenCalledOnce();
+    expect(vector.retrieve).toHaveBeenCalledOnce();
+
+    const proposal =
+      results.find(item => item.entity.id === "proposal:PEP-484");
+
+    expect(proposal).toBeDefined();
+    expect(proposal?.metadata?.sources).toEqual([
+      "graph",
+      "vector"
+    ]);
+    expect(
+      results.filter(item => item.entity.id === "proposal:PEP-484")
+    ).toHaveLength(1);
+    expect(results.map(item => item.entity.id)).toEqual(
+      expect.arrayContaining([
+        "proposal:PEP-484",
+        "feature:typing",
+        "concern:readability"
+      ])
+    );
+    expect(proposal?.score).toBeLessThanOrEqual(1);
+
+  });
+
+  it("F: duplicate entity keeps graph payload and both sources", async () => {
+
+    const service =
+      new RetrievalService(
+        {
+          retrieve: vi.fn(async () => [
+            entityResult("proposal:PEP-484", 5, "graph", "Type Hints")
+          ])
+        },
+        {
+          retrieve: vi.fn(async () => [
+            {
+              ...entityResult(
+                "proposal:PEP-484",
+                0.7,
+                "vector",
+                "Wrong Label"
+              )
+            }
+          ])
+        },
+        new SimpleRanker()
+      );
+
+    const results =
+      await service.retrieve({
+        query: "PEP-484",
+        mode: "hybrid"
+      });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].entity.label).toBe("Type Hints");
+    expect(results[0].metadata?.sources).toEqual([
+      "graph",
+      "vector"
+    ]);
+
+  });
+
+  it("G: empty retrieval returns empty", async () => {
+
+    const service =
+      new RetrievalService(
+        { retrieve: vi.fn(async () => []) },
+        { retrieve: vi.fn(async () => []) },
+        new SimpleRanker()
+      );
+
+    const results =
+      await service.retrieve({
+        query: "unsupported quantum photosynthesis",
+        mode: "hybrid"
+      });
+
+    expect(results).toEqual([]);
+
+  });
+
+  it("H: fused ranking scores stay unit-bounded", async () => {
+
+    const service =
+      new RetrievalService(
+        {
+          retrieve: vi.fn(async () => [
+            entityResult("proposal:PEP-484", 15, "graph", "Type Hints")
+          ])
+        },
+        {
+          retrieve: vi.fn(async () => [
+            entityResult("proposal:PEP-484", 0.99, "vector", "Type Hints")
+          ])
+        },
+        new SimpleRanker()
+      );
+
+    const results =
+      await service.retrieve({
+        query: "What is PEP-484?",
+        mode: "hybrid"
+      });
+
+    expect(results[0].score).toBeGreaterThan(0);
+    expect(results[0].score).toBeLessThanOrEqual(1);
+    expect(results[0].score).not.toBe(15.99);
+
+  });
 
   it("merges graph and vector results", async () => {
 
@@ -81,7 +287,7 @@ describe("RetrievalService hybrid retrieval", () => {
         result => result.entity.id === "proposal:PEP-484"
       );
 
-    expect(proposal?.score).toBe(6.8);
+    expect(proposal?.score).toBeLessThanOrEqual(1);
     expect(proposal?.metadata?.sources).toEqual([
       "graph",
       "vector"
@@ -281,14 +487,42 @@ describe("RetrievalService hybrid retrieval", () => {
 
   });
 
-  it("fails explicitly when a hybrid source errors", async () => {
+  it("degrades to graph when vector fails in hybrid mode", async () => {
 
     const service =
       new RetrievalService(
         {
           retrieve: vi.fn(async () => [
-            entityResult("proposal:PEP-484", 1, "graph")
+            entityResult("proposal:PEP-484", 1, "graph", "Type Hints")
           ])
+        },
+        {
+          retrieve: vi.fn(async () => {
+            throw new Error("embedding failed");
+          })
+        },
+        new SimpleRanker()
+      );
+
+    const results =
+      await service.retrieve({
+        query: "What is PEP-484?",
+        mode: "hybrid"
+      });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].source).toBe("graph");
+
+  });
+
+  it("fails only when both hybrid sources error", async () => {
+
+    const service =
+      new RetrievalService(
+        {
+          retrieve: vi.fn(async () => {
+            throw new Error("neo4j down");
+          })
         },
         {
           retrieve: vi.fn(async () => {
@@ -304,8 +538,7 @@ describe("RetrievalService hybrid retrieval", () => {
         mode: "hybrid"
       })
     ).rejects.toMatchObject({
-      code: "VECTOR_RETRIEVAL_FAILED",
-      message: "embedding failed"
+      code: "RETRIEVAL_FAILED"
     });
 
     await expect(

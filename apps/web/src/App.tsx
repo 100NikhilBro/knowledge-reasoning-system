@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import {
   ApiClientError,
   checkHealth,
@@ -11,13 +17,14 @@ import { EmptyState } from "./components/EmptyState";
 import { ErrorState } from "./components/ErrorState";
 import { EvidencePanel } from "./components/EvidencePanel";
 import { GraphPanel } from "./components/GraphPanel";
-import { HowKrsWorks } from "./components/HowKrsWorks";
 import { LoadingState } from "./components/LoadingState";
 import { QueryInput } from "./components/QueryInput";
 import { ReasoningTraceView } from "./components/ReasoningTrace";
+import { RelationshipPath } from "./components/RelationshipPath";
 import {
   collectGroundedEvidence,
-  deriveGraphFromResult
+  deriveGraphFromResult,
+  deriveRelationshipPath
 } from "./lib/graph-from-result";
 import type {
   HealthStatus,
@@ -27,10 +34,13 @@ import type {
 export function App() {
   const apiConfig = useMemo(() => resolveApiConfig(), []);
   const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | undefined>();
   const [result, setResult] = useState<ReasoningResult | null>(null);
   const [health, setHealth] = useState<HealthStatus>("unknown");
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +53,7 @@ export function App() {
 
     return () => {
       cancelled = true;
+      abortRef.current?.abort();
     };
   }, [apiConfig]);
 
@@ -52,9 +63,15 @@ export function App() {
       return;
     }
 
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     setError(null);
+    setErrorCode(undefined);
     setResult(null);
+    setSubmittedQuery(trimmed);
 
     try {
       const next = await reason(
@@ -62,17 +79,28 @@ export function App() {
           query: trimmed,
           topK: 5
         },
-        apiConfig
+        apiConfig,
+        controller.signal
       );
       setResult(next);
       setHealth("ok");
     } catch (err) {
+      if (
+        err instanceof ApiClientError &&
+        err.message === "Request cancelled."
+      ) {
+        return;
+      }
+
       setResult(null);
       const message =
         err instanceof ApiClientError
           ? err.message
           : "Unexpected client error.";
       setError(message);
+      setErrorCode(
+        err instanceof ApiClientError ? String(err.code) : "UNKNOWN"
+      );
       if (err instanceof ApiClientError && err.code === "NETWORK_ERROR") {
         setHealth("down");
       }
@@ -91,45 +119,58 @@ export function App() {
     [result]
   );
 
+  const path = useMemo(
+    () => deriveRelationshipPath(result),
+    [result]
+  );
+
   return (
-    <AppShell health={health} pipelineActive={Boolean(result) || loading}>
+    <AppShell health={health}>
       <div className="workspace">
-        <div className="stack">
-          <QueryInput
-            value={query}
-            loading={loading}
-            onChange={setQuery}
-            onSubmit={() => {
-              void submit();
+        <QueryInput
+          value={query}
+          loading={loading}
+          onChange={setQuery}
+          onSubmit={() => {
+            void submit();
+          }}
+        />
+
+        {error ? (
+          <ErrorState
+            message={error}
+            code={errorCode}
+            onRetry={
+              errorCode === "NETWORK_ERROR" ||
+              errorCode === "RATE_LIMITED" ||
+              errorCode === "REASONING_FAILED"
+                ? () => {
+                    void submit();
+                  }
+                : undefined
+            }
+          />
+        ) : null}
+
+        {loading ? <LoadingState /> : null}
+
+        {!loading && !result && !error ? (
+          <EmptyState
+            onSelectExample={(example) => {
+              setQuery(example);
             }}
           />
+        ) : null}
 
-          {error ? <ErrorState message={error} /> : null}
-
-          {loading ? <LoadingState /> : null}
-
-          {!loading && !result && !error ? (
-            <EmptyState onSelectExample={setQuery} />
-          ) : null}
-
-          {!loading && result ? <AnswerPanel result={result} /> : null}
-
-          {!loading && !result ? (
-            <HowKrsWorks onSelectExample={setQuery} />
-          ) : null}
-        </div>
-
-        <div className="stack">
-          {!loading && result ? (
-            <>
-              <EvidencePanel evidence={evidence} />
-              <ReasoningTraceView trace={result.trace} />
-              <GraphPanel model={graph} />
-            </>
-          ) : (
+        {!loading && result ? (
+          <div className="result-stack">
+            <AnswerPanel result={result} query={submittedQuery} />
+            <RelationshipPath hops={path} />
+            <EvidencePanel evidence={evidence} />
+            <ReasoningTraceView trace={result.trace} />
             <GraphPanel model={graph} />
-          )}
-        </div>
+          </div>
+        ) : null}
       </div>
     </AppShell>
   );

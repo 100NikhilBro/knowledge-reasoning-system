@@ -123,6 +123,30 @@ describe("detectFocusRelationships", () => {
     ]);
   });
 
+  it("detects focuses for how/why phrasing without hard-coded domain answers", () => {
+    expect(
+      detectFocusRelationships(
+        "How did the proposal address the problem?"
+      )
+    ).toContain("ADDRESSES");
+
+    expect(
+      detectFocusRelationships(
+        "Why was the proposal proposed?"
+      )
+    ).toEqual(
+      expect.arrayContaining(["ADDRESSES", "INTRODUCES"])
+    );
+
+    expect(
+      detectFocusRelationships(
+        "What did it introduce and what decision was ultimately made?"
+      )
+    ).toEqual(
+      expect.arrayContaining(["INTRODUCES", "RESULTS_IN"])
+    );
+  });
+
   it("includes IMPLEMENTED_IN when a Python version implementation is asked", () => {
     expect(
       detectFocusRelationships(

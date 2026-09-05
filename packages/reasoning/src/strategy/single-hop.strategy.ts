@@ -17,9 +17,10 @@ import {
 /**
  * Default path: pass collected evidence through unchanged.
  *
- * When the planner sets focusRelationships, expand one hop from seed
- * entities and retain only neighbors linked by those relationship types
- * (plus their seed anchors). Attaches relationship provenance on evidence.
+ * When the planner sets focusRelationships, expand focused relationship
+ * types from seeds and from newly reached neighbors (bounded second pass)
+ * so compound chains like INTRODUCES → ADDRESSES can be grounded without
+ * dumping unrelated neighbors.
  *
  * When requireRelationshipBetween is set, only retain an edge whose
  * endpoints match both query phrases; otherwise return empty evidence.
@@ -62,53 +63,42 @@ implements ReasoningStrategy {
       byId.set(item.entity.id, item);
     }
 
-    let focusedHit = false;
+    const seedIds =
+      new Set(
+        evidence.evidence.map(
+          item => item.entity.id
+        )
+      );
 
-    for (const item of evidence.evidence) {
+    let focusedHit =
+      await this.expandFocusedNeighbors(
+        graph,
+        focusSet,
+        byId,
+        [...seedIds]
+      );
 
-      const neighbors =
-        await graph.findNeighbors(
-          item.entity.type,
-          item.entity.id
+    /*
+     * Second pass: expand from newly reached nodes so a second hop along
+     * focused types can be collected (e.g. Feature --ADDRESSES--> Concern
+     * after Proposal --INTRODUCES--> Feature).
+     */
+    if (focusedHit) {
+      const frontier =
+        [...byId.keys()].filter(
+          id => !seedIds.has(id)
         );
 
-      for (const neighbor of neighbors) {
-
-        if (
-          !focusSet.has(
-            neighbor.relationship.type
-          )
-        ) {
-          continue;
-        }
-
-        focusedHit = true;
-
-        if (!byId.has(item.entity.id)) {
-          byId.set(item.entity.id, item);
-        }
-
-        const existing =
-          byId.get(neighbor.neighbor.id);
-
-        const focusedItem: Evidence = {
-          entity: neighbor.neighbor,
-          score: Math.max(
-            existing?.score ?? 0,
-            item.score,
-            0.95
-          ),
-          source: "graph",
-          relationship: neighbor.relationship
-        };
-
-        byId.set(
-          neighbor.neighbor.id,
-          focusedItem
+      const secondHit =
+        await this.expandFocusedNeighbors(
+          graph,
+          focusSet,
+          byId,
+          frontier
         );
 
-      }
-
+      focusedHit =
+        focusedHit || secondHit;
     }
 
     if (!focusedHit) {
@@ -159,6 +149,92 @@ implements ReasoningStrategy {
     return {
       evidence: focusedEvidence
     };
+
+  }
+
+  private async expandFocusedNeighbors(
+
+    graph: GraphTraversalService,
+
+    focusSet: Set<string>,
+
+    byId: Map<string, Evidence>,
+
+    fromIds: string[]
+
+  ): Promise<boolean> {
+
+    let focusedHit = false;
+
+    for (const id of fromIds) {
+
+      const item =
+        byId.get(id);
+
+      if (!item) {
+        continue;
+      }
+
+      const neighbors =
+        await graph.findNeighbors(
+          item.entity.type,
+          item.entity.id
+        );
+
+      for (const neighbor of neighbors) {
+
+        if (
+          !focusSet.has(
+            neighbor.relationship.type
+          )
+        ) {
+          continue;
+        }
+
+        focusedHit = true;
+
+        const existing =
+          byId.get(neighbor.neighbor.id);
+
+        /*
+         * Prefer keeping an existing focused relationship over overwriting
+         * with a later edge of a different type.
+         */
+        if (
+          existing?.relationship &&
+          focusSet.has(existing.relationship.type)
+        ) {
+          continue;
+        }
+
+        const focusedItem: Evidence = {
+          entity: neighbor.neighbor,
+          score: Math.max(
+            existing?.score ?? 0,
+            item.score,
+            0.95
+          ),
+          source: "graph",
+          relationship: neighbor.relationship,
+          ...(existing?.metadata
+            ? { metadata: existing.metadata }
+            : {})
+        };
+
+        byId.set(
+          neighbor.neighbor.id,
+          focusedItem
+        );
+
+        if (!byId.has(item.entity.id)) {
+          byId.set(item.entity.id, item);
+        }
+
+      }
+
+    }
+
+    return focusedHit;
 
   }
 

@@ -12,19 +12,27 @@ export function buildTrace(
 
   const steps: ReasoningStep[] =
 
-    evidenceSet.evidence.map(item => ({
+    evidenceSet.evidence.map(item => {
 
-      description:
+      const base =
+        `Selected ${item.entity.type}: ${item.entity.label}`;
 
-        `Selected ${item.entity.type}: ${item.entity.label}`,
+      const description =
+        item.relationship
+          ? `${base} via ${item.relationship.type} (${item.relationship.from} → ${item.relationship.to})`
+          : base;
 
-      evidence: [
+      return {
 
-        item
+        description,
 
-      ]
+        evidence: [
+          item
+        ]
 
-    }));
+      };
+
+    });
 
   return {
 

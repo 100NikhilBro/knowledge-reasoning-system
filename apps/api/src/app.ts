@@ -76,13 +76,18 @@ function toPublicReasoningResult(
   result: ReasoningResult
 ): ReasoningResult {
 
+  const confidence =
+    typeof result.confidence === "number" &&
+    Number.isFinite(result.confidence)
+      ? Math.min(1, Math.max(0, result.confidence))
+      : 0;
+
   const response: ReasoningResult = {
 
     answer:
       result.answer,
 
-    confidence:
-      result.confidence,
+    confidence,
 
     citations:
       result.citations,

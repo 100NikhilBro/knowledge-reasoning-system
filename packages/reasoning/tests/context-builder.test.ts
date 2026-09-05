@@ -419,8 +419,8 @@ describe("Context construction and grounding", () => {
         return {
 
           evidence: [
-            evidence("a", 1),
-            evidence("b", 0.5)
+            evidence("a", 1, { label: "Alpha" }),
+            evidence("b", 0.5, { label: "Beta" })
           ]
 
         };
@@ -482,7 +482,7 @@ describe("Context construction and grounding", () => {
 
     await engine.reason({
 
-      query: "test"
+      query: "What is Alpha?"
 
     });
 

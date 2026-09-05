@@ -84,11 +84,30 @@ export {
   corpusAttests
 } from "./utils/build-grounded-corpus.js";
 
+export {
+  extractTopicCodes,
+  extractSignificantTokens,
+  classifyEntityCompatibility,
+  isEntityCompatibleWithQuery,
+  filterCompatibleEvidence
+} from "./utils/query-evidence-compatibility.js";
+
+export type {
+  EvidenceCompatibility,
+  EvidenceCompatibilityKind
+} from "./utils/query-evidence-compatibility.js";
+
 
 export {
   DefaultConfidenceEngine
 }
 from "./services/confidence-engine.service.js";
+
+export {
+  computeGroundedAnswerConfidence,
+  computePartialGroundedConfidence,
+  clampUnitInterval
+} from "./utils/compute-grounded-confidence.js";
 
 
 export {
@@ -100,6 +119,15 @@ export {
   DefaultReasoningEngine
 }
 from "./services/reasoning-engine.service.js";
+
+export type {
+  TraversalHit
+} from "./types/traversal-hit.js";
+
+export {
+  traversalHitsToEvidence,
+  MultiHopStrategy
+} from "./strategy/multi-hop.strategy.js";
 
 export {
   DefaultContextBuilder
@@ -151,9 +179,17 @@ export type {
   AnswerVerificationReport
 } from "./types/answer-verification.js";
 
-export type {
-  CitationValidationResult
-} from "./types/citation-validation-result.js";
+export {
+  detectFocusRelationships,
+  detectMultiHopPathQuery,
+  queryRequiresRelationalEvidence
+} from "./utils/detect-focus-relationships.js";
+
+export {
+  causalClaimsAreGrounded,
+  contextHasRelationalEvidence,
+  relationalQueryIsSupported
+} from "./utils/relational-claim-grounding.js";
 
 
 

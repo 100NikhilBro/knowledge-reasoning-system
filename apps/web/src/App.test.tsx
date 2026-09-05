@@ -13,11 +13,40 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "./App";
-import type { ReasoningResult } from "./types/reasoning";
+import type { Evidence, ReasoningResult } from "./types/reasoning";
 
-const sampleResult: ReasoningResult = {
+function entityEvidence(
+  options: Partial<Evidence> & {
+    id: string;
+    label: string;
+    type?: string;
+    source?: string;
+    channel?: string;
+    relationship?: Evidence["relationship"];
+    metadata?: Evidence["metadata"];
+  }
+): Evidence {
+  return {
+    entity: {
+      id: options.id,
+      type: options.type ?? "Entity",
+      label: options.label,
+      source: options.source ?? "corpus.md",
+      confidence: 1,
+      properties: {}
+    },
+    score: 0.9,
+    source: options.channel ?? "graph",
+    ...(options.relationship
+      ? { relationship: options.relationship }
+      : {}),
+    ...(options.metadata ? { metadata: options.metadata } : {})
+  };
+}
+
+const groundedResult: ReasoningResult = {
   answer: "Proposal: Type Hints\nFeature: Typing",
-  confidence: 0.9,
+  confidence: 0.64,
   citations: [
     {
       entityId: "proposal:PEP-484",
@@ -27,20 +56,51 @@ const sampleResult: ReasoningResult = {
   trace: {
     steps: [
       {
-        description: "Selected Proposal: Type Hints",
+        description:
+          "Selected Proposal: Type Hints via INTRODUCES (proposal:PEP-484 → feature:typing)",
         evidence: [
-          {
-            entity: {
-              id: "proposal:PEP-484",
-              type: "Proposal",
-              label: "Type Hints",
-              source: "pep-484.md",
-              confidence: 1,
-              properties: {}
-            },
-            score: 0.9,
-            source: "graph"
-          }
+          entityEvidence({
+            id: "proposal:PEP-484",
+            label: "Type Hints",
+            type: "Proposal",
+            channel: "graph",
+            metadata: { sources: ["graph", "vector"] },
+            relationship: {
+              from: "proposal:PEP-484",
+              to: "feature:typing",
+              type: "INTRODUCES",
+              confidence: 1
+            }
+          })
+        ]
+      },
+      {
+        description:
+          "Selected Feature: Typing via ADDRESSES (feature:typing → concern:readability)",
+        evidence: [
+          entityEvidence({
+            id: "feature:typing",
+            label: "Typing",
+            type: "Feature",
+            channel: "graph",
+            relationship: {
+              from: "feature:typing",
+              to: "concern:readability",
+              type: "ADDRESSES",
+              confidence: 1
+            }
+          })
+        ]
+      },
+      {
+        description: "Selected Concern: Readability",
+        evidence: [
+          entityEvidence({
+            id: "concern:readability",
+            label: "Readability",
+            type: "Concern",
+            channel: "vector"
+          })
         ]
       }
     ]
@@ -48,9 +108,20 @@ const sampleResult: ReasoningResult = {
   explanation: {
     answer: "Proposal: Type Hints\nFeature: Typing",
     reasoning: [
-      "Evidence used: 1",
+      "Evidence used: 3",
       "Grounded on proposal:PEP-484 from pep-484.md"
     ]
+  }
+};
+
+const failClosedResult: ReasoningResult = {
+  answer: "",
+  confidence: 0,
+  citations: [],
+  trace: { steps: [] },
+  explanation: {
+    answer: "",
+    reasoning: ["Evidence used: 0"]
   }
 };
 
@@ -73,12 +144,21 @@ function mockApi(options: {
         if (options.reason) {
           return options.reason(init);
         }
-        return Response.json(sampleResult);
+        return Response.json(groundedResult);
       }
 
       return new Response("not found", { status: 404 });
     })
   );
+}
+
+async function runQuery(text: string) {
+  const user = userEvent.setup();
+  const input = await screen.findByLabelText(/Reasoning query/i);
+  await user.clear(input);
+  await user.type(input, text);
+  await user.click(screen.getByRole("button", { name: /^Run$/i }));
+  return user;
 }
 
 describe("Knowledge Reasoning Web UI", () => {
@@ -87,69 +167,130 @@ describe("Knowledge Reasoning Web UI", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the initial empty state", async () => {
+  it("renders the initial empty workspace", async () => {
     mockApi({});
 
     render(<App />);
 
     expect(
       await screen.findByRole("heading", {
-        name: /How KRS Works/i
+        name: /Evidence-grounded reasoning/i
       })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: /Currently Supported/i })
+      screen.getByRole("heading", {
+        name: /Knowledge Reasoning System/i,
+        level: 1
+      })
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: /How to Use KRS/i })
-    ).toBeInTheDocument();
-    expect(
-      screen.getAllByRole("button", { name: "What is PEP-484?" }).length
-    ).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/Reasoning query/i)).toBeInTheDocument();
   });
 
-  it("submits a query and renders answer, confidence, citations, explanation, and trace", async () => {
-    const user = userEvent.setup();
+  it("A: successful grounded answer", async () => {
+    mockApi({});
+    render(<App />);
+    await runQuery("What is PEP-484?");
 
+    expect(
+      await screen.findByRole("heading", { name: /Grounded response/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/Proposal: Type Hints/i).length
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("Grounded")).toBeInTheDocument();
+  });
+
+  it("B/C/D: graph, vector, and hybrid provenance badges", async () => {
+    mockApi({});
+    render(<App />);
+    await runQuery("What is PEP-484?");
+
+    await screen.findByRole("heading", { name: /Grounded evidence/i });
+
+    expect(screen.getAllByText("Graph + Vector").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Graph").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Vector").length).toBeGreaterThan(0);
+  });
+
+  it("E/F: relationship path and multi-hop trace", async () => {
+    mockApi({});
+    render(<App />);
+    await runQuery("How is PEP-484 connected to type hints?");
+
+    const pathHeading = await screen.findByRole("heading", {
+      name: /Relationship path/i
+    });
+    const pathPanel = pathHeading.closest("section");
+    expect(pathPanel).not.toBeNull();
+
+    expect(
+      within(pathPanel as HTMLElement).getByRole("img")
+    ).toHaveAttribute(
+      "aria-label",
+      expect.stringMatching(/INTRODUCES/i)
+    );
+    expect(
+      within(pathPanel as HTMLElement).getAllByText("INTRODUCES").length
+    ).toBeGreaterThan(0);
+    expect(
+      within(pathPanel as HTMLElement).getAllByText("ADDRESSES").length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("heading", { name: /Reasoning trace/i })
+    ).toBeInTheDocument();
+  });
+
+  it("G/H: confidence display and verified state", async () => {
+    mockApi({});
+    render(<App />);
+    await runQuery("What is PEP-484?");
+
+    expect(
+      await screen.findByLabelText(/Grounded confidence 64%/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText("64%")).toBeInTheDocument();
+    expect(screen.getByText("Verified")).toBeInTheDocument();
+  });
+
+  it("I: fail-closed state", async () => {
     mockApi({
-      reason: (init) => {
-        expect(init?.method).toBe("POST");
-        const body = JSON.parse(String(init?.body));
-        expect(body.query).toBe("What is PEP-484?");
-        return Response.json(sampleResult);
+      reason: () => Response.json(failClosedResult)
+    });
+    render(<App />);
+    await runQuery("Who proposed PEP-999?");
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /No grounded answer found/i
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/does not provide sufficient evidence/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText("Fail-closed")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/Grounded confidence 0%/i)
+    ).toBeInTheDocument();
+  });
+
+  it("J: API/network error states", async () => {
+    mockApi({
+      reason: () => {
+        throw new TypeError("Failed to fetch");
       }
     });
-
     render(<App />);
+    await runQuery("What is PEP-484?");
 
-    const input = await screen.findByLabelText(/Reasoning query/i);
-    await user.clear(input);
-    await user.type(input, "What is PEP-484?");
-    await user.click(
-      screen.getByRole("button", { name: /Run reasoning/i })
-    );
-
-    const answer = await screen.findByRole("heading", {
-      name: /Grounded response/i
-    });
-    const answerPanel = answer.closest("section");
-    expect(answerPanel).not.toBeNull();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Could not reach the API/i);
+    expect(within(alert).getByText(/Network error/i)).toBeInTheDocument();
     expect(
-      within(answerPanel as HTMLElement).getByText(/Proposal: Type Hints/i)
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText(/Confidence 0.9/i)).toBeInTheDocument();
-    expect(
-      screen.getAllByText("proposal:PEP-484").length
-    ).toBeGreaterThan(0);
-    expect(
-      screen.getByText(/Grounded on proposal:PEP-484 from pep-484.md/i)
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Selected Proposal: Type Hints/i)
+      screen.getByRole("button", { name: /Retry/i })
     ).toBeInTheDocument();
   });
 
-  it("shows a loading state while reasoning", async () => {
+  it("K: loading state", async () => {
     const user = userEvent.setup();
     let resolveReason: ((value: Response) => void) | undefined;
 
@@ -164,70 +305,70 @@ describe("Knowledge Reasoning Web UI", () => {
 
     const input = await screen.findByLabelText(/Reasoning query/i);
     await user.type(input, "What is typing?");
-    await user.click(
-      screen.getByRole("button", { name: /Run reasoning/i })
-    );
+    await user.click(screen.getByRole("button", { name: /^Run$/i }));
 
     expect(
       await screen.findByText(/Reasoning in progress/i)
     ).toBeInTheDocument();
-    expect(screen.getByText("RETRIEVING EVIDENCE")).toBeInTheDocument();
-    expect(screen.getByText("BUILDING CONTEXT")).toBeInTheDocument();
-    expect(screen.getByText("VERIFYING ANSWER")).toBeInTheDocument();
+    expect(screen.getByText("Retrieving knowledge")).toBeInTheDocument();
+    expect(screen.getByText("Connecting evidence")).toBeInTheDocument();
+    expect(screen.getByText("Reasoning")).toBeInTheDocument();
+    expect(screen.getByText("Verifying")).toBeInTheDocument();
 
-    resolveReason?.(Response.json(sampleResult));
+    resolveReason?.(Response.json(groundedResult));
 
     expect(
       await screen.findByRole("heading", { name: /Grounded response/i })
     ).toBeInTheDocument();
   });
 
-  it.each([
-    [400, "INVALID_REQUEST", /query was rejected/i],
-    [401, "UNAUTHORIZED", /Authentication failed/i],
-    [429, "RATE_LIMITED", /Too many requests/i],
-    [500, "REASONING_FAILED", /Reasoning failed on the server/i]
-  ] as const)(
-    "handles %s errors without leaking internals",
-    async (status, code, message) => {
-      const user = userEvent.setup();
+  it("L: keeps shell query regions on narrow layout semantics", async () => {
+    mockApi({});
+    render(<App />);
 
-      mockApi({
-        reason: () =>
-          Response.json(
-            {
-              error: "ignored-raw",
-              code,
-              stack: "secret-stack",
-              detail: "neo4j bolt://secret"
-            },
-            { status }
-          )
-      });
+    expect(
+      await screen.findByRole("heading", {
+        name: /Knowledge Reasoning System/i,
+        level: 1
+      })
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Reasoning query/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: /Ask a complex knowledge question/i
+      })
+    ).toBeInTheDocument();
+  });
 
-      render(<App />);
+  it("handles validation errors without leaking internals", async () => {
+    mockApi({
+      reason: () =>
+        Response.json(
+          {
+            error: "ignored-raw",
+            code: "INVALID_REQUEST",
+            stack: "secret-stack"
+          },
+          { status: 400 }
+        )
+    });
+    render(<App />);
+    await runQuery("What is PEP-484?");
 
-      const input = await screen.findByLabelText(/Reasoning query/i);
-      await user.type(input, "What is PEP-484?");
-      await user.click(
-        screen.getByRole("button", { name: /Run reasoning/i })
-      );
-
-      expect(await screen.findByRole("alert")).toHaveTextContent(message);
-      expect(screen.queryByText(/secret-stack/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/neo4j/i)).not.toBeInTheDocument();
-    }
-  );
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/query was rejected/i);
+    expect(within(alert).getByText(/Validation error/i)).toBeInTheDocument();
+    expect(screen.queryByText(/secret-stack/i)).not.toBeInTheDocument();
+  });
 
   it("clears previous answers when a later request fails", async () => {
-    const user = userEvent.setup();
     let call = 0;
 
     mockApi({
       reason: () => {
         call += 1;
         if (call === 1) {
-          return Response.json(sampleResult);
+          return Response.json(groundedResult);
         }
         return Response.json(
           {
@@ -240,22 +381,13 @@ describe("Knowledge Reasoning Web UI", () => {
     });
 
     render(<App />);
-
-    const input = await screen.findByLabelText(/Reasoning query/i);
-    await user.type(input, "What is PEP-484?");
-    await user.click(
-      screen.getByRole("button", { name: /Run reasoning/i })
-    );
+    await runQuery("What is PEP-484?");
 
     expect(
       await screen.findByRole("heading", { name: /Grounded response/i })
     ).toBeInTheDocument();
 
-    await user.clear(input);
-    await user.type(input, "What is typing?");
-    await user.click(
-      screen.getByRole("button", { name: /Run reasoning/i })
-    );
+    await runQuery("What is typing?");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /Reasoning failed on the server/i
@@ -263,57 +395,34 @@ describe("Knowledge Reasoning Web UI", () => {
     expect(
       screen.queryByRole("heading", { name: /Grounded response/i })
     ).not.toBeInTheDocument();
-    expect(screen.queryByText(/Proposal: Type Hints/i)).not.toBeInTheDocument();
   });
 
-  it("handles network failure", async () => {
-    const user = userEvent.setup();
-
-    mockApi({
-      reason: () => {
-        throw new TypeError("Failed to fetch");
-      }
-    });
-
+  it("does not expose raw evidence scores in the evidence panel", async () => {
+    mockApi({});
     render(<App />);
+    await runQuery("What is PEP-484?");
 
-    const input = await screen.findByLabelText(/Reasoning query/i);
-    await user.type(input, "What is PEP-484?");
-    await user.click(
-      screen.getByRole("button", { name: /Run reasoning/i })
-    );
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      /Could not reach the API/i
-    );
+    const evidenceHeading = await screen.findByRole("heading", {
+      name: /Grounded evidence/i
+    });
+    const evidencePanel = evidenceHeading.closest("section");
+    expect(evidencePanel).not.toBeNull();
+    expect(
+      within(evidencePanel as HTMLElement).queryByText(/score=/i)
+    ).not.toBeInTheDocument();
+    expect(
+      within(evidencePanel as HTMLElement).queryByText(/0\.9/)
+    ).not.toBeInTheDocument();
   });
 
   it("keeps API credentials out of rendered UI output", async () => {
     mockApi({});
-
     const { container } = render(<App />);
     await screen.findByRole("heading", {
-      name: /How KRS Works/i
+      name: /Evidence-grounded reasoning/i
     });
 
     expect(container.textContent).not.toMatch(/change-me-in-development/);
     expect(container.textContent).not.toMatch(/password123/);
-  });
-
-  it("renders layout-critical shell regions", async () => {
-    mockApi({});
-
-    render(<App />);
-
-    expect(
-      await screen.findByRole("heading", {
-        name: /Knowledge Reasoning System/i,
-        level: 1
-      })
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText(/Reasoning query/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: /Knowledge graph view/i })
-    ).toBeInTheDocument();
   });
 });

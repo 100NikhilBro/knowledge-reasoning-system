@@ -41,6 +41,16 @@ import {
   isGeneratedAnswerGrounded
 } from "../utils/is-generated-answer-grounded.js";
 
+import {
+  causalClaimsAreGrounded,
+  relationalQueryIsSupported
+} from "../utils/relational-claim-grounding.js";
+
+import {
+  computeGroundedAnswerConfidence,
+  computePartialGroundedConfidence
+} from "../utils/compute-grounded-confidence.js";
+
 function safeEmptyResult(): ReasoningResult {
 
   const explanation: AnswerExplanation = {
@@ -77,10 +87,10 @@ function safeEmptyResult(): ReasoningResult {
  * When generation invents unsupported claims but evidence exists,
  * return grounded facts plus an explicit insufficiency clause.
  * Never invents domain facts. Empty evidence still fail-closes to empty.
+ * Confidence is recomputed (partial) — never retains an inflated generator score.
  */
 function safePartialGroundedResult(
-  context: ReasoningContext,
-  confidence: number
+  context: ReasoningContext
 ): ReasoningResult {
 
   const answer =
@@ -88,6 +98,14 @@ function safePartialGroundedResult(
 
   const explanation =
     buildAnswerExplanation(answer, context);
+
+  const confidence =
+    computePartialGroundedConfidence({
+      evidence: context.evidence,
+      ...(context.comparison !== undefined
+        ? { comparison: context.comparison }
+        : {})
+    });
 
   return {
 
@@ -241,6 +259,37 @@ implements AnswerVerifier {
     }
 
     if (
+      !relationalQueryIsSupported(
+        context.query,
+        context
+      )
+    ) {
+
+      reasons.push(
+        "Relational or causal query lacks relationship-backed evidence"
+      );
+
+      return {
+
+        result:
+          safeEmptyResult(),
+
+        report: {
+
+          accepted: false,
+
+          rejectedCitations:
+            result.citations ?? [],
+
+          reasons
+
+        }
+
+      };
+
+    }
+
+    if (
       !isGeneratedAnswerGrounded(
         result.answer,
         context
@@ -255,8 +304,39 @@ implements AnswerVerifier {
 
         result:
           safePartialGroundedResult(
-            context,
-            result.confidence
+            context
+          ),
+
+        report: {
+
+          accepted: true,
+
+          rejectedCitations: [],
+
+          reasons
+
+        }
+
+      };
+
+    }
+
+    if (
+      !causalClaimsAreGrounded(
+        result.answer,
+        context
+      )
+    ) {
+
+      reasons.push(
+        "Causal claims are not supported by relationship evidence; replaced with grounded partial answer"
+      );
+
+      return {
+
+        result:
+          safePartialGroundedResult(
+            context
           ),
 
         report: {
@@ -371,7 +451,12 @@ implements AnswerVerifier {
         result.answer,
 
       confidence:
-        result.confidence,
+        computeGroundedAnswerConfidence({
+          evidence: context.evidence,
+          ...(context.comparison !== undefined
+            ? { comparison: context.comparison }
+            : {})
+        }),
 
       citations:
         citationCheck.valid,

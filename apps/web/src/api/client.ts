@@ -116,7 +116,8 @@ export async function checkHealth(
 
 export async function reason(
   request: ReasoningRequest,
-  config: ApiClientConfig
+  config: ApiClientConfig,
+  signal?: AbortSignal
 ): Promise<ReasoningResult> {
   const fetchImpl = config.fetchImpl ?? fetch;
 
@@ -141,9 +142,17 @@ export async function reason(
         ...(request.sessionId !== undefined
           ? { sessionId: request.sessionId }
           : {})
-      })
+      }),
+      signal
     });
-  } catch {
+  } catch (error) {
+    if (
+      signal?.aborted ||
+      (error instanceof DOMException && error.name === "AbortError")
+    ) {
+      throw new ApiClientError("Request cancelled.", 0, "UNKNOWN");
+    }
+
     throw new ApiClientError(
       userMessageFor(0, "NETWORK_ERROR"),
       0,

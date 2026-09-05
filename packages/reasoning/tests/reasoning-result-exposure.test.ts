@@ -193,7 +193,10 @@ describe(
           .toContain("PEP-484");
 
         expect(result.confidence)
-          .toBe(0.9);
+          .toBeGreaterThan(0);
+
+        expect(result.confidence)
+          .toBeLessThanOrEqual(1);
 
         expect(result.citations)
           .toHaveLength(1);

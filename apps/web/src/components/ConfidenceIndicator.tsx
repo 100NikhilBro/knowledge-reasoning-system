@@ -1,31 +1,42 @@
+import {
+  clampConfidenceDisplay,
+  formatConfidencePercent
+} from "../lib/provenance";
+
 interface ConfidenceIndicatorProps {
   confidence: number;
 }
 
 /**
- * Visualizes the backend confidence value without reinterpretation.
- * Uses a soft display cap for the bar width only when values exceed 1.
+ * Visualizes the public backend confidence value (already in [0, 1]).
+ * Does not reinterpret or expose raw retrieval scores.
  */
 export function ConfidenceIndicator({
   confidence
 }: ConfidenceIndicatorProps) {
-  const barRatio =
-    confidence <= 0
-      ? 0
-      : confidence <= 1
-        ? confidence
-        : Math.min(confidence / 10, 1);
+  const clamped = clampConfidenceDisplay(confidence);
+  const percent = formatConfidencePercent(confidence);
 
   return (
-    <div className="confidence" aria-label={`Confidence ${confidence}`}>
+    <div
+      className="confidence"
+      aria-label={`Grounded confidence ${percent}`}
+    >
       <div className="confidence-meta">
-        <span>confidence</span>
-        <span>{confidence}</span>
+        <span>Grounded confidence</span>
+        <span className="confidence-value">{percent}</span>
       </div>
-      <div className="confidence-track" aria-hidden="true">
+      <div
+        className="confidence-track"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(clamped * 100)}
+        aria-valuetext={percent}
+      >
         <div
           className="confidence-fill"
-          style={{ width: `${Math.round(barRatio * 100)}%` }}
+          style={{ width: `${Math.round(clamped * 100)}%` }}
         />
       </div>
     </div>

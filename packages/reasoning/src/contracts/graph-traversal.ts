@@ -1,12 +1,18 @@
 import type {
-  EvidenceSet,
-  KnowledgeEntity
+  EvidenceSet
 } from "@knowledge/shared";
 
 import {
   GraphTraversalService
 } from "@knowledge/graph";
 
+import type {
+  TraversalHit
+} from "../types/traversal-hit.js";
+
+/**
+ * Graph traversal that preserves real relationship/path provenance.
+ */
 export interface GraphTraversal {
 
   traverse(
@@ -17,6 +23,6 @@ export interface GraphTraversal {
 
     depth: number
 
-  ): Promise<KnowledgeEntity[]>;
+  ): Promise<TraversalHit[]>;
 
 }

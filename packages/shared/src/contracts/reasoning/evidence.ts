@@ -20,4 +20,10 @@ export interface Evidence {
    */
   relationship?: KnowledgeRelationship;
 
+  /**
+   * Optional retrieval provenance (e.g. hybrid sources, channel scores).
+   * Never treated as public answer confidence.
+   */
+  metadata?: Record<string, unknown>;
+
 }

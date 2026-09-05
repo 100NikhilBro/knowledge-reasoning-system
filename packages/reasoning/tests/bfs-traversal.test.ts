@@ -89,9 +89,21 @@ describe(
 
         expect(
 
-          result[0].id
+          result[0].entity.id
 
         ).toBe("A");
+
+        expect(
+
+          result[0].depth
+
+        ).toBe(0);
+
+        expect(
+
+          result[0].relationship
+
+        ).toBeUndefined();
 
       }
 

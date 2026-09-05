@@ -4,41 +4,14 @@ import type { HealthStatus } from "../types/reasoning";
 
 interface AppShellProps {
   health: HealthStatus;
-  pipelineActive?: boolean;
   children: ReactNode;
 }
 
-const PIPELINE = [
-  "Query",
-  "Retrieve",
-  "Reason",
-  "Ground",
-  "Verify",
-  "Answer"
-] as const;
-
-export function AppShell({
-  health,
-  pipelineActive = false,
-  children
-}: AppShellProps) {
+export function AppShell({ health, children }: AppShellProps) {
   return (
     <div className="app-shell">
       <Header health={health} />
-
-      <div className="pipeline-strip" aria-hidden="true">
-        {PIPELINE.map((step) => (
-          <div
-            key={step}
-            className="pipeline-step"
-            data-active={pipelineActive}
-          >
-            {step}
-          </div>
-        ))}
-      </div>
-
-      {children}
+      <main className="workspace-main">{children}</main>
     </div>
   );
 }

@@ -85,6 +85,34 @@ describe(
           plan.strategy
         ).toBe("explanation");
 
+        expect(plan.focusRelationships).toEqual(
+          expect.arrayContaining([
+            "ADDRESSES",
+            "INTRODUCES"
+          ])
+        );
+
+      }
+
+    );
+
+    it(
+
+      "routes path/how-through questions to multi-hop",
+
+      async () => {
+
+        const plan =
+          await planner.plan({
+
+            query:
+              "How is PEP-484 connected to readability through type hints?"
+
+          });
+
+        expect(plan.strategy).toBe("multi-hop");
+        expect(plan.maxDepth).toBe(2);
+
       }
 
     );

@@ -263,7 +263,7 @@ function createPipelineEngine(options: {
 
                   to: item.entity.id,
 
-                  type: "RELATED",
+                  type: "INTRODUCES",
 
                   confidence: 1
 
@@ -529,6 +529,20 @@ describe("End-to-end reasoning pipeline", () => {
       ])
     );
 
+    const featureEvidence =
+      pipeline.expanded?.evidence.find(
+        item => item.entity.id === "feature:typing"
+      );
+
+    expect(featureEvidence?.relationship?.type)
+      .toBe("INTRODUCES");
+    expect(featureEvidence?.relationship?.type)
+      .not.toBe("RELATED");
+    expect(featureEvidence?.relationship?.from)
+      .toBe("proposal:PEP-484");
+    expect(featureEvidence?.relationship?.to)
+      .toBe("feature:typing");
+
     expect(result.citations.map(c => c.entityId))
       .toEqual(
         expect.arrayContaining([
@@ -594,9 +608,20 @@ describe("End-to-end reasoning pipeline", () => {
         0.95
       );
 
+    const feature =
+      makeEvidence(
+        "feature:typing",
+        "Typing",
+        0.9,
+        "Feature"
+      );
+
     const { engine, pipeline } =
       createPipelineEngine({
-        evidence: [pep]
+        evidence: [pep],
+        neighbors: new Map([
+          [pep.entity.id, [feature]]
+        ])
       });
 
     const result =
@@ -609,6 +634,14 @@ describe("End-to-end reasoning pipeline", () => {
     expect(pipeline.plan?.strategy)
       .toBe("explanation");
 
+    expect(pipeline.plan?.focusRelationships)
+      .toEqual(
+        expect.arrayContaining([
+          "ADDRESSES",
+          "INTRODUCES"
+        ])
+      );
+
     // Existing factory maps unsupported explanation to SingleHopStrategy.
     expect(pipeline.strategyClass)
       .toBe(SingleHopStrategy.name);
@@ -617,10 +650,47 @@ describe("End-to-end reasoning pipeline", () => {
       .toContain("Type Hints");
 
     expect(
+      pipeline.expanded?.evidence.some(
+        item =>
+          item.relationship?.type === "INTRODUCES"
+      )
+    ).toBe(true);
+
+    expect(
       result.explanation?.reasoning[0]
     ).toContain("Evidence used:");
 
     assertPublicResult(result);
+
+  });
+
+  it("fails closed for explanation when focused relationships are missing", async () => {
+
+    const pep =
+      makeEvidence(
+        "proposal:PEP-484",
+        "Type Hints",
+        0.95
+      );
+
+    const { engine, pipeline } =
+      createPipelineEngine({
+        evidence: [pep]
+      });
+
+    const result =
+      await engine.reason({
+        query: "Why was PEP-484 introduced?"
+      });
+
+    expect(pipeline.plan?.strategy)
+      .toBe("explanation");
+
+    expect(pipeline.expanded?.evidence)
+      .toEqual([]);
+
+    expect(result.answer).toBe("");
+    expect(result.confidence).toBe(0);
 
   });
 

@@ -37,8 +37,9 @@ type GraphRetrievePort =
 /**
  * Hybrid Graph + Vector retrieval with independent graph/vector modes.
  *
- * Defaults keep graph live and vector as a no-op until a VectorStoreRetriever
- * (or other VectorRetriever) is injected — matching DI-friendly testing.
+ * Hybrid mode retrieves from available channels, fuses with per-source
+ * normalization + provenance, and ranks. A single channel failure degrades
+ * gracefully to the other channel.
  */
 export class RetrievalService
 implements IRetrievalService {
@@ -136,6 +137,16 @@ implements IRetrievalService {
         this.vector.retrieve(query)
       ]);
 
+    const graphResults =
+      graphResult.status === "fulfilled"
+        ? graphResult.value
+        : [];
+
+    const vectorResults =
+      vectorResult.status === "fulfilled"
+        ? vectorResult.value
+        : [];
+
     if (
       graphResult.status === "rejected" &&
       vectorResult.status === "rejected"
@@ -152,40 +163,14 @@ implements IRetrievalService {
       );
     }
 
-    if (graphResult.status === "rejected") {
-      throw new RetrievalError(
-        "GRAPH_RETRIEVAL_FAILED",
-        graphResult.reason instanceof Error
-          ? graphResult.reason.message
-          : "Graph retrieval failed",
-        {
-          cause:
-            graphResult.reason instanceof Error
-              ? graphResult.reason
-              : undefined
-        }
-      );
-    }
-
-    if (vectorResult.status === "rejected") {
-      throw new RetrievalError(
-        "VECTOR_RETRIEVAL_FAILED",
-        vectorResult.reason instanceof Error
-          ? vectorResult.reason.message
-          : "Vector retrieval failed",
-        {
-          cause:
-            vectorResult.reason instanceof Error
-              ? vectorResult.reason
-              : undefined
-        }
-      );
-    }
-
+    /*
+     * Graceful degradation: one channel may fail; the other still contributes.
+     */
     const merged =
       mergeResults(
-        graphResult.value,
-        vectorResult.value
+        graphResults,
+        vectorResults,
+        query.query
       );
 
     return this.ranker.rank(
