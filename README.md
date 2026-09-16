@@ -5,15 +5,14 @@
 KRS converts supported knowledge documents into structured and semantic representations, retrieves relevant evidence, reasons over relationships, grounds generation in that evidence, and verifies the resulting answer.
 
 **Current ingestion:** PEP-style Markdown documents
+
 **Architecture:** Knowledge Graph + Semantic Retrieval + Evidence-Grounded Reasoning
 
 ---
 
 ## Working Demonstration
 
-https://github.com/user-attachments/assets/d7f39b94-9e38-4494-a99c-cd6369d562fc
-
-
+[View the demonstration](https://github.com/user-attachments/assets/d7f39b94-9e38-4494-a99c-cd6369d562fc)
 
 The demonstration shows document ingestion, retrieval, relationship reasoning, verification, and grounded answer generation.
 
@@ -27,7 +26,7 @@ A simple LLM pipeline looks like:
 Question → LLM → Answer
 ```
 
-The problem is that the answer can be difficult to ground, verify, or trace back to its source.
+The problem is that the answer can be difficult to ground, verify, or trace back to its source knowledge.
 
 KRS instead follows:
 
@@ -63,9 +62,9 @@ The LLM is therefore used as part of the reasoning pipeline rather than being tr
 
 Knowledge documents are transformed into two complementary representations:
 
-| Representation            | Purpose                                        |
+| Representation | Purpose |
 | ------------------------- | ---------------------------------------------- |
-| **Neo4j Knowledge Graph** | Entities, relationships, and graph traversal   |
+| **Neo4j Knowledge Graph** | Entities, relationships, and graph traversal |
 | **Qdrant Semantic Index** | Semantic similarity retrieval using embeddings |
 
 The retrieval layer combines both channels:
@@ -74,17 +73,24 @@ The retrieval layer combines both channels:
 Graph Evidence ─────┐
                     ├─→ Score Normalization
 Vector Evidence ────┘
-                           ↓
-                     Weighted Fusion
-                           ↓
-                  Evidence Filtering
-                           ↓
+
+                         ↓
+
+                   Weighted Fusion
+                         ↓
+
+                   Evidence Filtering
+                         ↓
+
                        Reasoning
-                           ↓
+                         ↓
+
                     Grounded Context
-                           ↓
+                         ↓
+
                      LLM Generation
-                           ↓
+                         ↓
+
                       Verification
 ```
 
@@ -100,9 +106,11 @@ KRS reasons over explicit graph relationships rather than treating semantic simi
 
 ```text
 Direct:
+
 A ──→ B
 
 Connected:
+
 A ──→ X ──→ B
 ```
 
@@ -167,9 +175,6 @@ The result can expose supporting evidence, citations, provenance, confidence, an
   <img width="5045" height="2932" alt="Knowledge Reasoning System Architecture" src="https://github.com/user-attachments/assets/fa9c4d29-d043-49a9-8f35-b63fa0e93eb9" />
 </p>
 
-
-
-
 ---
 
 ## Key Capabilities
@@ -191,19 +196,19 @@ The result can expose supporting evidence, citations, provenance, confidence, an
 
 ## Tech Stack
 
-| Layer           | Technology                     |
-| --------------- | ------------------------------ |
-| Web             | React · TypeScript · Vite      |
-| API             | Node.js · Express · TypeScript |
-| Worker          | Node.js · TypeScript · BullMQ  |
-| Extraction      | Rule-based TypeScript          |
-| Knowledge Graph | Neo4j                          |
-| Embeddings      | Jina                           |
-| Vector Store    | Qdrant                         |
-| Working Memory  | Redis                          |
-| LLM             | Groq                           |
-| Infrastructure  | Docker                         |
-| Deployment      | Render                         |
+| Layer | Technology |
+| ---------------- | ----------------------------- |
+| Web | React · TypeScript · Vite |
+| API | Node.js · Express · TypeScript |
+| Worker | Node.js · TypeScript · BullMQ |
+| Extraction | Rule-based TypeScript |
+| Knowledge Graph | Neo4j |
+| Embeddings | Jina |
+| Vector Store | Qdrant |
+| Working Memory | Redis |
+| LLM | Groq |
+| Infrastructure | Docker |
+| Deployment | Render |
 
 ---
 
@@ -260,11 +265,8 @@ The reasoning architecture operates on entities, relationships, and evidence and
 ```bash
 git clone https://github.com/100NikhilBro/knowledge-reasoning-system.git
 cd knowledge-reasoning-system
-
 pnpm install
-
 docker compose -f docker/docker-compose.yml up -d
-
 cp .env.example .env
 ```
 
