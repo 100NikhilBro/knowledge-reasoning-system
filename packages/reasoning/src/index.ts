@@ -197,7 +197,11 @@ export {
   interpretGraphPath,
   interpretEvidencePaths,
   formatPathInterpretationTraceStep,
-  toPathInterpretationSummary
+  toPathInterpretationSummary,
+  validateEndpointPath,
+  validateSharedHubBridge,
+  reconstructSharedHubPath,
+  findValidatedEndpointPath
 } from "./utils/interpret-path.js";
 
 export type {

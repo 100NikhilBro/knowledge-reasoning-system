@@ -179,9 +179,8 @@ export function contextHasConnectingEdge(
 }
 
 /**
- * Shared-hub / two-edge bridge: left and right both attach to the same
- * intermediate entity (e.g. Typing ← INTRODUCES ← PEP-484 → ADDRESSES → Readability).
- * Does not invent edges — only inspects attested relationships.
+ * Shared-hub / two-edge bridge validated by edge identity (not entity
+ * collapse). Supports converging A→X←B and diverging A←X→B topologies.
  */
 export function contextHasSharedHubBridge(
   context: ReasoningContext,
@@ -190,144 +189,26 @@ export function contextHasSharedHubBridge(
   requiredBridge?: string
 ): boolean {
 
-  const endpoints =
-    listEndpoints(context);
-
-  const leftIds =
-    new Set(
-      endpoints
-        .filter(entity => entityMatchesPhrase(entity, left))
-        .map(entity => entity.id)
-    );
-
-  const rightIds =
-    new Set(
-      endpoints
-        .filter(entity => entityMatchesPhrase(entity, right))
-        .map(entity => entity.id)
-    );
-
-  if (leftIds.size === 0 || rightIds.size === 0) {
-    return false;
-  }
-
-  const neighborsById =
-    new Map<string, Set<string>>();
-
-  function touch(
-    a: string,
-    b: string
-  ): void {
-
-    const setA =
-      neighborsById.get(a) ?? new Set<string>();
-
-    setA.add(b);
-    neighborsById.set(a, setA);
-
-    const setB =
-      neighborsById.get(b) ?? new Set<string>();
-
-    setB.add(a);
-    neighborsById.set(b, setB);
-
-  }
-
-  for (const relationship of listRelationships(context)) {
-    touch(relationship.from, relationship.to);
-  }
-
-  const bridgeCandidates =
-    new Set<string>();
-
-  for (const leftId of leftIds) {
-    for (const neighbor of neighborsById.get(leftId) ?? []) {
-      if (!rightIds.has(neighbor) && !leftIds.has(neighbor)) {
-        bridgeCandidates.add(neighbor);
-      }
-    }
-  }
-
-  for (const bridgeId of bridgeCandidates) {
-    const bridgeEntity =
-      endpoints.find(entity => entity.id === bridgeId);
-
-    if (
-      requiredBridge &&
-      bridgeEntity &&
-      !entityMatchesPhrase(bridgeEntity, requiredBridge)
-    ) {
-      continue;
-    }
-
-    if (
-      requiredBridge &&
-      !bridgeEntity &&
-      !entityMatchesPhrase(
-        {
-          id: bridgeId,
-          label: bridgeId,
-          source: "",
-          properties: {}
-        },
-        requiredBridge
-      )
-    ) {
-      continue;
-    }
-
-    const neighbors =
-      neighborsById.get(bridgeId) ?? new Set<string>();
-
-    const touchesLeft =
-      [...leftIds].some(id => neighbors.has(id));
-
-    const touchesRight =
-      [...rightIds].some(id => neighbors.has(id));
-
-    if (touchesLeft && touchesRight) {
-      return true;
-    }
-  }
-
-  return false;
+  return contextHasValidatedSharedHub(
+    context,
+    left,
+    right,
+    requiredBridge
+  );
 
 }
+
+import {
+  betweenTopologySupported,
+  contextHasValidatedSharedHub
+} from "./validate-relationship-path.js";
 
 function betweenIsSupported(
   context: ReasoningContext,
   between: RelationshipBetweenQuery
 ): boolean {
 
-  const direct =
-    contextHasConnectingEdge(
-      context,
-      between.left,
-      between.right
-    );
-
-  if (between.mode === "direct") {
-    return direct;
-  }
-
-  if (direct) {
-    return true;
-  }
-
-  if (between.mode === "bridge") {
-    return contextHasSharedHubBridge(
-      context,
-      between.left,
-      between.right,
-      between.bridge
-    );
-  }
-
-  return contextHasSharedHubBridge(
-    context,
-    between.left,
-    between.right
-  );
+  return betweenTopologySupported(context, between);
 
 }
 

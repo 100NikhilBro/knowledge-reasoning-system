@@ -15,6 +15,10 @@ import {
   type AllowedRelationshipType
 } from "@knowledge/shared";
 
+import {
+  contextHasValidatedSharedHub
+} from "./validate-relationship-path.js";
+
 /**
  * Explicit logical-support outcomes for conclusion / implication queries.
  */
@@ -1005,107 +1009,12 @@ function contextHasSharedHubBridge(
   requiredBridge?: string
 ): boolean {
 
-  const endpoints =
-    listEndpoints(context);
-
-  const leftIds =
-    new Set(
-      endpoints
-        .filter(entity => entityMatchesPhrase(entity, left))
-        .map(entity => entity.id)
-    );
-
-  const rightIds =
-    new Set(
-      endpoints
-        .filter(entity => entityMatchesPhrase(entity, right))
-        .map(entity => entity.id)
-    );
-
-  if (leftIds.size === 0 || rightIds.size === 0) {
-    return false;
-  }
-
-  const neighborsById =
-    new Map<string, Set<string>>();
-
-  function touch(
-    a: string,
-    b: string
-  ): void {
-
-    const setA =
-      neighborsById.get(a) ?? new Set<string>();
-
-    setA.add(b);
-    neighborsById.set(a, setA);
-
-    const setB =
-      neighborsById.get(b) ?? new Set<string>();
-
-    setB.add(a);
-    neighborsById.set(b, setB);
-
-  }
-
-  for (const relationship of listRelationships(context)) {
-    touch(relationship.from, relationship.to);
-  }
-
-  const bridgeCandidates =
-    new Set<string>();
-
-  for (const leftId of leftIds) {
-    for (const neighbor of neighborsById.get(leftId) ?? []) {
-      if (!rightIds.has(neighbor) && !leftIds.has(neighbor)) {
-        bridgeCandidates.add(neighbor);
-      }
-    }
-  }
-
-  for (const bridgeId of bridgeCandidates) {
-    const bridgeEntity =
-      endpoints.find(entity => entity.id === bridgeId);
-
-    if (
-      requiredBridge &&
-      bridgeEntity &&
-      !entityMatchesPhrase(bridgeEntity, requiredBridge)
-    ) {
-      continue;
-    }
-
-    if (
-      requiredBridge &&
-      !bridgeEntity &&
-      !entityMatchesPhrase(
-        {
-          id: bridgeId,
-          label: bridgeId,
-          source: "",
-          properties: {}
-        },
-        requiredBridge
-      )
-    ) {
-      continue;
-    }
-
-    const neighbors =
-      neighborsById.get(bridgeId) ?? new Set<string>();
-
-    const touchesLeft =
-      [...leftIds].some(id => neighbors.has(id));
-
-    const touchesRight =
-      [...rightIds].some(id => neighbors.has(id));
-
-    if (touchesLeft && touchesRight) {
-      return true;
-    }
-  }
-
-  return false;
+  return contextHasValidatedSharedHub(
+    context,
+    left,
+    right,
+    requiredBridge
+  );
 
 }
 
