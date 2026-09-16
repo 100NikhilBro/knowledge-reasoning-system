@@ -28,6 +28,14 @@ import {
   understandQuery
 } from "../utils/query-understanding.js";
 
+import {
+  buildPartialGroundedAnswer
+} from "../utils/build-partial-grounded-answer.js";
+
+import {
+  relationshipAttributionIsGrounded
+} from "../utils/relationship-attribution.js";
+
 /**
  * LLM-backed answer generator.
  *
@@ -136,6 +144,12 @@ export class LlmAnswerGenerator
         systemPrompt: GROUNDING_SYSTEM_PROMPT
       });
 
+    const answer =
+      enforceRelationalGenerationContract(
+        generation.answer,
+        context
+      );
+
     const confidence =
       await this.confidence.calculate(
         evidenceSet
@@ -148,7 +162,7 @@ export class LlmAnswerGenerator
       );
 
     return {
-      answer: generation.answer,
+      answer,
       confidence,
       citations,
       trace: buildTrace(evidenceSet)
@@ -203,5 +217,61 @@ export class LlmAnswerGenerator
       );
 
   }
+
+}
+
+/**
+ * RELATIONSHIP-family asks require an attributable S-P-O verbalization.
+ * Entity-only LLM answers (e.g. target name alone) violate that contract;
+ * substitute the existing deterministic grounded synthesis instead of
+ * weakening attribution verification.
+ */
+function enforceRelationalGenerationContract(
+  answer: string,
+  context: ReasoningContext
+): string {
+
+  if (!requiresRelationalAnswer(context)) {
+    return answer;
+  }
+
+  if (relationshipAttributionIsGrounded(answer, context)) {
+    return answer;
+  }
+
+  const grounded =
+    buildPartialGroundedAnswer(context).trim();
+
+  return grounded.length > 0
+    ? grounded
+    : answer;
+
+}
+
+function requiresRelationalAnswer(
+  context: ReasoningContext
+): boolean {
+
+  const understanding =
+    context.understanding ??
+    (context.query
+      ? understandQuery(context.query)
+      : undefined);
+
+  if (!understanding) {
+    return false;
+  }
+
+  if (understanding.requireTypedEdge) {
+    return true;
+  }
+
+  return (
+    understanding.intent === "RELATIONSHIP" ||
+    understanding.intent === "DIRECT_RELATIONSHIP" ||
+    understanding.intent === "CONNECTED_RELATIONSHIP" ||
+    understanding.intent === "BRIDGE_RELATIONSHIP" ||
+    understanding.intent === "COMPOUND"
+  );
 
 }
