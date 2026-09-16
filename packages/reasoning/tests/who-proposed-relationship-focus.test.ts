@@ -20,6 +20,10 @@ import {
 } from "../src/utils/detect-focus-relationships.js";
 
 import {
+  classifyQueryIntent
+} from "../src/utils/query-understanding.js";
+
+import {
   SingleHopStrategy
 } from "../src/strategy/single-hop.strategy.js";
 
@@ -170,6 +174,70 @@ describe("detectFocusRelationships", () => {
       "RESULTS_IN",
       "IMPLEMENTED_IN"
     ]);
+  });
+
+  it("detects PROPOSED_BY for active yes/no authorship (Did X propose Y?)", () => {
+    expect(
+      detectFocusRelationships(
+        "Did Guido van Rossum propose PEP-484?"
+      )
+    ).toEqual(["PROPOSED_BY"]);
+
+    expect(
+      classifyQueryIntent(
+        "Did Guido van Rossum propose PEP-484?"
+      )
+    ).toBe("RELATIONSHIP");
+  });
+
+  it("detects PROPOSED_BY for generic active yes/no authorship", () => {
+    expect(
+      detectFocusRelationships(
+        "Did AuthorY propose EntityAlpha?"
+      )
+    ).toEqual(["PROPOSED_BY"]);
+
+    expect(
+      classifyQueryIntent(
+        "Did AuthorY propose EntityAlpha?"
+      )
+    ).toBe("RELATIONSHIP");
+  });
+
+  it("preserves passive proposed-by and who-proposed focuses", () => {
+    expect(
+      detectFocusRelationships(
+        "Was PEP-484 proposed by Guido van Rossum?"
+      )
+    ).toEqual(["PROPOSED_BY"]);
+
+    expect(
+      classifyQueryIntent(
+        "Was PEP-484 proposed by Guido van Rossum?"
+      )
+    ).toBe("RELATIONSHIP");
+
+    expect(
+      detectFocusRelationships("Who proposed PEP-484?")
+    ).toEqual(["PROPOSED_BY"]);
+  });
+
+  it("does not treat unrelated did-questions as PROPOSED_BY", () => {
+    expect(
+      detectFocusRelationships(
+        "Did PEP-484 get accepted?"
+      )
+    ).toBeUndefined();
+
+    expect(
+      classifyQueryIntent("Did PEP-484 get accepted?")
+    ).toBe("FACT");
+
+    expect(
+      detectFocusRelationships(
+        "What did it introduce?"
+      )
+    ).toEqual(["INTRODUCES"]);
   });
 });
 

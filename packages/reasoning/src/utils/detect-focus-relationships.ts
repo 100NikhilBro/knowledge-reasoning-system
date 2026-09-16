@@ -22,7 +22,14 @@ export function detectFocusRelationships(
     normalized.includes("who authored") ||
     normalized.includes("authored by") ||
     normalized.includes("who did it come from") ||
-    normalized.includes("where did it come from")
+    normalized.includes("where did it come from") ||
+    /*
+     * Active / yes-no authorship: "Did X propose Y?" / "Does X propose Y?"
+     * Requires propose|proposes — not bare "did" and not "proposal".
+     */
+    /\b(?:did|does|do)\b[\s\S]{0,120}?\bpropos(?:e|es)\b/.test(
+      normalized
+    )
   ) {
     focuses.push("PROPOSED_BY");
   }
