@@ -72,7 +72,18 @@ export function detectFocusRelationships(
         normalized.includes("needed") ||
         normalized.includes("created")
       )
-    )
+    ) ||
+    /*
+     * Active / yes-no / passive address verbs without requiring
+     * "concern" / "problem" lexical anchors.
+     */
+    /\b(?:did|does|do)\b[\s\S]{0,120}?\baddress(?:es|ed)?\b/.test(
+      normalized
+    ) ||
+    /\b(?:was|is|are)\b[\s\S]{0,120}?\baddressed\s+by\b/.test(
+      normalized
+    ) ||
+    /\baddressed\s+by\b/.test(normalized)
   ) {
     focuses.push("ADDRESSES");
   }
@@ -138,29 +149,48 @@ export function detectFocusRelationships(
     (
       normalized.includes("status") &&
       normalized.includes("result")
-    )
+    ) ||
+    /*
+     * Active / yes-no result-in wording without requiring "decision".
+     */
+    /\b(?:did|does|do)\b[\s\S]{0,120}?\bresults?\s+in\b/.test(
+      normalized
+    ) ||
+    /\bresulted\s+in\b/.test(normalized) ||
+    /\bresults?\s+in\b/.test(normalized)
   ) {
     focuses.push("RESULTS_IN");
   }
 
   /*
    * Ask for IMPLEMENTED_IN when the query clearly seeks a version
-   * implementation edge. Domain-agnostic: "version" + implement*.
+   * implementation edge. Domain-agnostic: "version" + implement*, or
+   * explicit "implemented in …" / "implement in …" wording.
    */
   if (
     (
-      normalized.includes("python version") ||
-      normalized.includes("python-version") ||
       (
-        normalized.includes("version") &&
-        normalized.includes("implement")
+        normalized.includes("python version") ||
+        normalized.includes("python-version") ||
+        (
+          normalized.includes("version") &&
+          normalized.includes("implement")
+        )
+      ) &&
+      (
+        normalized.includes("implement") ||
+        normalized.includes("implemented") ||
+        normalized.includes("implements")
       )
-    ) &&
-    (
-      normalized.includes("implement") ||
-      normalized.includes("implemented") ||
-      normalized.includes("implements")
-    )
+    ) ||
+    /\b(?:was|is|are)\b[\s\S]{0,120}?\bimplemented\s+in\b/.test(
+      normalized
+    ) ||
+    /\b(?:did|does|do)\b[\s\S]{0,120}?\bimplemented\s+in\b/.test(
+      normalized
+    ) ||
+    /\bimplemented\s+in\b/.test(normalized) ||
+    /\bimplement\s+in\b/.test(normalized)
   ) {
     focuses.push("IMPLEMENTED_IN");
   }

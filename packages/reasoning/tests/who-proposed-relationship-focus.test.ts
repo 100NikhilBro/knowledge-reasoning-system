@@ -239,6 +239,90 @@ describe("detectFocusRelationships", () => {
       )
     ).toEqual(["INTRODUCES"]);
   });
+
+  it("detects ADDRESSES for active yes/no without concern anchor", () => {
+    expect(
+      detectFocusRelationships(
+        "Did PEP-484 address Readability?"
+      )
+    ).toEqual(["ADDRESSES"]);
+
+    expect(
+      classifyQueryIntent(
+        "Did PEP-484 address Readability?"
+      )
+    ).toBe("RELATIONSHIP");
+
+    expect(
+      detectFocusRelationships(
+        "What concern is addressed by PEP-484?"
+      )
+    ).toContain("ADDRESSES");
+
+    expect(
+      detectFocusRelationships(
+        "Did PEP-484 improve Readability?"
+      )
+    ).toBeUndefined();
+  });
+
+  it("detects RESULTS_IN for active yes/no without decision anchor", () => {
+    expect(
+      detectFocusRelationships(
+        "Did PEP-484 result in Accepted?"
+      )
+    ).toEqual(["RESULTS_IN"]);
+
+    expect(
+      classifyQueryIntent(
+        "Did PEP-484 result in Accepted?"
+      )
+    ).toBe("RELATIONSHIP");
+
+    expect(
+      detectFocusRelationships(
+        "What decision resulted from PEP-484?"
+      )
+    ).toEqual(["RESULTS_IN"]);
+
+    expect(
+      detectFocusRelationships(
+        "Did PEP-484 get Accepted?"
+      )
+    ).toBeUndefined();
+  });
+
+  it("detects IMPLEMENTED_IN for was-implemented-in without version token", () => {
+    expect(
+      detectFocusRelationships(
+        "Was PEP-484 implemented in Python 3.5?"
+      )
+    ).toEqual(["IMPLEMENTED_IN"]);
+
+    expect(
+      classifyQueryIntent(
+        "Was PEP-484 implemented in Python 3.5?"
+      )
+    ).toBe("RELATIONSHIP");
+
+    expect(
+      detectFocusRelationships(
+        "Which Python version implemented PEP-484?"
+      )
+    ).toEqual(["IMPLEMENTED_IN"]);
+
+    expect(
+      detectFocusRelationships(
+        "Was PEP-484 released in Python 3.5?"
+      )
+    ).toBeUndefined();
+
+    expect(
+      detectFocusRelationships(
+        "What is Python 3.5?"
+      )
+    ).toBeUndefined();
+  });
 });
 
 describe("who-proposed relationship focus", () => {
