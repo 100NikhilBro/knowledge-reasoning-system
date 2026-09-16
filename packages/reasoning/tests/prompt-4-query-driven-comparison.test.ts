@@ -268,9 +268,7 @@ describe("Prompt 4 query-driven comparison", () => {
       detectComparisonDimensions(
         "Compare A, B based on relationships and decisions."
       ).dimensions
-    ).toEqual(
-      expect.arrayContaining(["relationships", "results_in"])
-    );
+    ).toEqual(["results_in"]);
   });
 
   it("5: relationship-only comparison", () => {

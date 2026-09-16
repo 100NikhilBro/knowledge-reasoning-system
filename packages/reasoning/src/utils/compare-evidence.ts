@@ -9,13 +9,11 @@ import {
   entityMatchesPhrase
 } from "./detect-relationship-between-query.js";
 
-import type {
-  ComparisonDimension,
-  ComparisonRequest
-} from "./detect-comparison-request.js";
-
 import {
-  relationshipTypesForDimensions
+  relationshipTypesForDimensions,
+  relationshipTypeForDimension,
+  type ComparisonDimension,
+  type ComparisonRequest
 } from "./detect-comparison-request.js";
 
 /**
@@ -323,29 +321,38 @@ export function buildStructuredComparison(
 
     const unsupportedDimensions: ComparisonDimension[] = [];
 
-    if (
-      request.dimensions.some(dimension =>
-        dimension !== "properties"
-      ) &&
-      relationships.length === 0
-    ) {
-      unsupportedDimensions.push(
-        ...request.dimensions.filter(dimension =>
-          dimension !== "properties"
-        )
-      );
-    }
+    for (const dimension of request.dimensions) {
+      if (dimension === "properties") {
+        if (Object.keys(properties).length === 0) {
+          unsupportedDimensions.push("properties");
+        }
+        continue;
+      }
 
-    if (
-      includeProperties &&
-      Object.keys(properties).length === 0
-    ) {
-      unsupportedDimensions.push("properties");
+      if (dimension === "relationships") {
+        if (relationships.length === 0) {
+          unsupportedDimensions.push("relationships");
+        }
+        continue;
+      }
+
+      const type =
+        relationshipTypeForDimension(dimension);
+
+      if (
+        !type ||
+        !relationships.some(fact => fact.type === type)
+      ) {
+        unsupportedDimensions.push(dimension);
+      }
     }
 
     const supported =
-      relationships.length > 0 ||
-      Object.keys(properties).length > 0;
+      unsupportedDimensions.length < request.dimensions.length &&
+      (
+        relationships.length > 0 ||
+        Object.keys(properties).length > 0
+      );
 
     perSubject.push({
       subject,

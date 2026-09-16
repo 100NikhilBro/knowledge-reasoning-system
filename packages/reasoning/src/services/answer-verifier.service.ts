@@ -119,6 +119,18 @@ function resolveVerificationStatus(
   forceNone: boolean
 ): AnswerSupportStatus | undefined {
 
+  /*
+   * Semantic status is monotonic: later renderer/accept traces must never
+   * upgrade PARTIALLY_SUPPORTED / NOT_SUPPORTED to SUPPORTED.
+   */
+  if (verification?.semantics.status === "NOT_SUPPORTED") {
+    return "NOT_SUPPORTED";
+  }
+
+  if (verification?.semantics.status === "PARTIALLY_SUPPORTED") {
+    return "PARTIALLY_SUPPORTED";
+  }
+
   if (
     extraReasons.some(reason =>
       /PARTIALLY_SUPPORTED/i.test(reason)
@@ -1673,7 +1685,7 @@ implements AnswerVerifier {
       context,
       intentVerification,
       [
-        "Verification: SUPPORTED — answer accepted"
+        `Verification: ${intentVerification.semantics.status} — answer accepted`
       ]
     );
 

@@ -47,6 +47,7 @@ export type PathInterpretationKind =
   | "CONNECTED"
   | "BRIDGE"
   | "MULTI_HOP"
+  | "COMPARISON_EVIDENCE"
   | "INSUFFICIENT";
 
 export interface PathInterpretation {
@@ -523,6 +524,29 @@ export function interpretEvidencePaths(
         direction: "outgoing" as const
       };
     })();
+
+  /*
+   * Comparison queries use per-subject relationship evidence — never a
+   * fabricated multi-hop path over the pooled comparison edges.
+   */
+  if (intent === "COMPARISON") {
+    const subjects =
+      resolved?.comparison?.subjects ?? [];
+
+    return {
+      kind: "COMPARISON_EVIDENCE",
+      sourceEntity: subjects[0],
+      targetEntity: subjects[1],
+      bridgeEntities: [],
+      relationships: [],
+      hopCount: 0,
+      supportsClaim: false,
+      explanation:
+        subjects.length > 0
+          ? `Comparison evidence for subjects [${subjects.join(", ")}] is not a graph path.`
+          : "Comparison evidence is not a graph path."
+    };
+  }
 
   /*
    * Exact subject-predicate-object(+direction) relationship claims.

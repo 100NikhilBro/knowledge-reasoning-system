@@ -18,7 +18,8 @@ import {
 } from "./classify-relational-support.js";
 
 import {
-  detectComparisonRequest
+  detectComparisonRequest,
+  relationshipTypeForDimension
 } from "./detect-comparison-request.js";
 
 import {
@@ -1543,16 +1544,77 @@ export function verifyAnswerAgainstIntent(
           predicate: "COMPARISON",
           status: "NOT_SUPPORTED"
         });
-      } else if (structured.unsupportedSubjects.length > 0) {
+      } else if (
+        structured.unsupportedSubjects.length > 0 ||
+        structured.perSubject.some(item =>
+          item.unsupportedDimensions.length > 0
+        )
+      ) {
         status = "PARTIALLY_SUPPORTED";
         reasons.push(
-          `Insufficient evidence for: ${structured.unsupportedSubjects.join(", ")}`
+          structured.unsupportedSubjects.length > 0
+            ? `Insufficient evidence for: ${structured.unsupportedSubjects.join(", ")}`
+            : "One or more requested comparison dimensions are unsupported"
         );
         traceLines.push(
           "Verification: comparison partially supported"
         );
       } else {
         status = "SUPPORTED";
+      }
+
+      /*
+       * Dimension leakage: unrequested ontology predicates must not appear
+       * in the grounded comparison answer.
+       */
+      const comparisonText =
+        `${context.comparison ?? ""}\n${answer}`;
+
+      const leakedPredicates: string[] = [];
+
+      for (const type of [
+        "ADDRESSES",
+        "INTRODUCES",
+        "PROPOSED_BY",
+        "RESULTS_IN",
+        "IMPLEMENTED_IN"
+      ] as const) {
+        const requested =
+          request.dimensions.includes("relationships") ||
+          request.dimensions.some(dimension =>
+            relationshipTypeForDimension(dimension) === type
+          );
+
+        if (requested) {
+          continue;
+        }
+
+        const cue =
+          type === "ADDRESSES"
+            ? /\baddresses\b/i
+            : type === "INTRODUCES"
+              ? /\bintroduces\b/i
+              : type === "PROPOSED_BY"
+                ? /\bproposed by\b/i
+                : type === "RESULTS_IN"
+                  ? /\bresults in\b/i
+                  : /\bimplemented in\b/i;
+
+        if (cue.test(comparisonText)) {
+          leakedPredicates.push(type);
+        }
+      }
+
+      if (leakedPredicates.length > 0) {
+        status = "NOT_SUPPORTED";
+        matchesIntent = false;
+        exceedsEvidence = true;
+        reasons.push(
+          `Comparison includes unrequested dimension(s): ${leakedPredicates.join(", ")}`
+        );
+        traceLines.push(
+          "Verification: comparison dimension leakage"
+        );
       }
 
       if (

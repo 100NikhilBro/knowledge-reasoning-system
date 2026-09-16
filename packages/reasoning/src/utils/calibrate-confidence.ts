@@ -296,7 +296,7 @@ export function calibrateAnswerConfidence(
   score =
     clampUnitInterval(score + dualChannelBonus(input.evidenceSet));
 
-  if (path?.supportsClaim) {
+  if (path?.supportsClaim && path.kind !== "COMPARISON_EVIDENCE") {
     if (path.kind === "DIRECT") {
       score = clampUnitInterval(score + 0.05);
       pushUnique(reasons, "direct graph relationship found");
@@ -315,6 +315,13 @@ export function calibrateAnswerConfidence(
     if (path.relationships.length > 0) {
       pushUnique(reasons, "valid graph relationships found");
     }
+  }
+
+  if (path?.kind === "COMPARISON_EVIDENCE") {
+    pushUnique(
+      reasons,
+      "comparison uses per-subject evidence (not a graph path)"
+    );
   }
 
   if (intent) {

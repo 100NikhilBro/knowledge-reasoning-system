@@ -155,7 +155,9 @@ export {
   detectComparisonRequest,
   extractComparisonSubjects,
   detectComparisonDimensions,
-  relationshipTypesForDimensions
+  relationshipTypesForDimensions,
+  relationshipTypeForDimension,
+  normalizeComparisonDimensions
 } from "./utils/detect-comparison-request.js";
 
 export type {

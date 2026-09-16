@@ -44,10 +44,27 @@ const DIMENSION_TO_TYPES: Record<
   implemented_in: "IMPLEMENTED_IN"
 };
 
+export function relationshipTypeForDimension(
+  dimension: ComparisonDimension
+): string | undefined {
+
+  if (
+    dimension === "relationships" ||
+    dimension === "properties"
+  ) {
+    return undefined;
+  }
+
+  return DIMENSION_TO_TYPES[dimension];
+
+}
+
 /**
  * Map comparison dimensions to ontology relationship types used for filtering.
- * "relationships" expands to the full allowed ontology set.
- * "properties" contributes no relationship types.
+ *
+ * Explicit predicate dimensions (introduces, proposed_by, …) are authoritative:
+ * the umbrella "relationships" token must not expand the set to every ontology
+ * type when specifics are also present.
  */
 export function relationshipTypesForDimensions(
   dimensions: ComparisonDimension[]
@@ -57,14 +74,7 @@ export function relationshipTypesForDimensions(
     return new Set();
   }
 
-  if (
-    dimensions.includes("relationships") ||
-    dimensions.length === 0
-  ) {
-    return new Set(ALLOWED_RELATIONSHIP_TYPES);
-  }
-
-  const types =
+  const specificTypes =
     new Set<string>();
 
   for (const dimension of dimensions) {
@@ -75,12 +85,56 @@ export function relationshipTypesForDimensions(
       continue;
     }
 
-    types.add(DIMENSION_TO_TYPES[dimension]);
+    specificTypes.add(DIMENSION_TO_TYPES[dimension]);
   }
 
-  return types.size > 0
-    ? types
-    : new Set(ALLOWED_RELATIONSHIP_TYPES);
+  /*
+   * Explicit relationship predicates constrain the comparison output.
+   * Do not widen to the full ontology merely because "relationships"
+   * was also mentioned as a scope cue.
+   */
+  if (specificTypes.size > 0) {
+    return specificTypes;
+  }
+
+  if (
+    dimensions.includes("relationships") ||
+    dimensions.length === 0
+  ) {
+    return new Set(ALLOWED_RELATIONSHIP_TYPES);
+  }
+
+  return new Set(ALLOWED_RELATIONSHIP_TYPES);
+
+}
+
+/**
+ * Normalize dimensions so explicit predicates replace the umbrella
+ * "relationships" token in the structured request used for output/verification.
+ */
+export function normalizeComparisonDimensions(
+  dimensions: ComparisonDimension[],
+  relationshipsOnly: boolean
+): ComparisonDimension[] {
+
+  const specific =
+    dimensions.filter(dimension =>
+      dimension !== "relationships"
+    );
+
+  if (specific.length > 0) {
+    return uniquePreserve(specific) as ComparisonDimension[];
+  }
+
+  if (
+    relationshipsOnly ||
+    dimensions.includes("relationships") ||
+    dimensions.length === 0
+  ) {
+    return ["relationships"];
+  }
+
+  return uniquePreserve(dimensions) as ComparisonDimension[];
 
 }
 
@@ -244,16 +298,23 @@ export function detectComparisonDimensions(
     dimensions.push("properties");
   }
 
-  if (
+  const mentionsRelationships =
     relationshipsOnly ||
-    /\brelationships?\b/i.test(query)
-  ) {
+    /\brelationships?\b/i.test(query);
+
+  if (mentionsRelationships) {
     if (!dimensions.includes("relationships")) {
       dimensions.unshift("relationships");
     }
   }
 
-  if (dimensions.length === 0) {
+  const normalized =
+    normalizeComparisonDimensions(
+      uniquePreserve(dimensions) as ComparisonDimension[],
+      relationshipsOnly
+    );
+
+  if (normalized.length === 0) {
     return {
       dimensions: ["relationships"],
       relationshipsOnly: true
@@ -261,8 +322,13 @@ export function detectComparisonDimensions(
   }
 
   return {
-    dimensions: uniquePreserve(dimensions) as ComparisonDimension[],
-    relationshipsOnly
+    dimensions: normalized,
+    relationshipsOnly:
+      relationshipsOnly ||
+      (
+        normalized.length === 1 &&
+        normalized[0] === "relationships"
+      )
   };
 
 }
