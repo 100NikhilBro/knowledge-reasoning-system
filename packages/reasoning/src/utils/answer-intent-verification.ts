@@ -102,6 +102,128 @@ function answerBoundsUnsupported(
 }
 
 /**
+ * Strip PEP identifiers before extracting numeric count candidates so
+ * PEP-484 / proposal:PEP-526 are never treated as analytical counts.
+ */
+function stripPepIdentifiers(
+  answer: string
+): string {
+
+  return answer
+    .replace(/\bproposal:PEP[\s_-]?\d+\b/gi, " ")
+    .replace(/\bPEP[\s_-]?\d+\b/gi, " ");
+
+}
+
+function extractCountCandidates(
+  answer: string
+): number[] {
+
+  const cleaned =
+    stripPepIdentifiers(answer);
+
+  const digits =
+    [...cleaned.matchAll(/\b(\d+)\b/g)]
+      .map(match => Number(match[1]))
+      .filter(value => Number.isFinite(value));
+
+  const words: Record<string, number> = {
+    zero: 0,
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10
+  };
+
+  for (const [word, value] of Object.entries(words)) {
+    if (new RegExp(`\\b${word}\\b`, "i").test(cleaned)) {
+      digits.push(value);
+    }
+  }
+
+  return digits;
+
+}
+
+function extractMentionedPeps(
+  answer: string
+): string[] {
+
+  return [...answer.matchAll(/\bPEP[\s_-]?(\d+)\b/gi)]
+    .map(match => `PEP-${match[1]}`);
+
+}
+
+function pepAllowedByAnalytical(
+  pep: string,
+  analytical: AnalyticalResult
+): boolean {
+
+  const compactPep =
+    pep.toLowerCase().replace(/[\s_-]/g, "");
+
+  const allowedIds =
+    [
+      ...analytical.deduplicatedEntityIds,
+      ...analytical.matchedEntities.map(item => item.entityId),
+      ...(analytical.nonMatchingEntities ?? []).map(item => item.entityId),
+      ...(analytical.universeEntityIds ?? [])
+    ];
+
+  return allowedIds.some(id =>
+    id.toLowerCase().replace(/[\s_-]/g, "").includes(compactPep)
+  );
+
+}
+
+function answerMentionsComplement(
+  answer: string,
+  analytical: AnalyticalResult
+): boolean {
+
+  if (
+    /\bnon-matching\b|\buniverse\b|\bnon matching\b|\bcomplement\b/i
+      .test(answer)
+  ) {
+    return true;
+  }
+
+  const nonMatching =
+    analytical.nonMatchingEntities ?? [];
+
+  if (nonMatching.length === 0) {
+    /*
+     * Empty complement may be expressed without the exact template words.
+     */
+    return (
+      /\bnone\b/i.test(answer) ||
+      /\bno peps?\b/i.test(answer) ||
+      /\ball(?:\s+\w+)?\s+peps?\b/i.test(answer) ||
+      /\bdo not\b|\bdon't\b|\bdoes not\b/i.test(answer) ||
+      /\b\(none\)/i.test(answer)
+    );
+  }
+
+  return (
+    /\bdo not\b|\bdon't\b|\bdoes not\b|\bnon-matching\b/i.test(answer) &&
+    nonMatching.some(item =>
+      mentionsPhrase(answer, item.entityId) ||
+      mentionsPhrase(answer, item.label) ||
+      extractMentionedPeps(answer).some(pep =>
+        item.entityId.toLowerCase().includes(pep.toLowerCase().replace("-", ""))
+      )
+    )
+  );
+
+}
+
+/**
  * Detect when generated prose invents a count/list that conflicts with
  * the deterministic analytical result.
  */
@@ -112,14 +234,17 @@ function detectAnalyticalAnswerContradiction(
 
   if (analytical.requestedTargetEstablished === false) {
     const claimsPositiveMatches =
-      /\bPEP[\s_-]?\d+\b/i.test(answer) ||
-      /\bcount of distinct[^.\n]*:\s*[1-9]/i.test(answer) ||
-      /\bmatched canonical ids:\s*\[[^\]]*\bpep\b/i.test(answer);
+      (
+        extractMentionedPeps(answer).length > 0 &&
+        !/zero matches|no matching|could not be established|without broadening/i
+          .test(answer)
+      ) ||
+      /\bcount of distinct[^.\n]*:\s*[1-9]/i.test(answer);
 
     if (
       claimsPositiveMatches &&
       !answerBoundsUnsupported(answer) &&
-      !/could not be established|refusing to broaden|no matching/i.test(answer)
+      !/could not be established|refusing to broaden|no matching|zero matches/i.test(answer)
     ) {
       return (
         "Answer claims analytical matches but the requested target was not established"
@@ -164,7 +289,8 @@ function detectAnalyticalAnswerContradiction(
       analytical.matchedEntities.length === 0 &&
       /\b(?:typing|type hints?)\b/i.test(answer) &&
       !/typing/i.test(objectPhrase) &&
-      !answerBoundsUnsupported(answer)
+      !answerBoundsUnsupported(answer) &&
+      !/zero matches|could not be established|without broadening/i.test(answer)
     ) {
       return (
         `Answer discusses Typing but the analytical request targeted "${objectPhrase}"`
@@ -176,12 +302,8 @@ function detectAnalyticalAnswerContradiction(
     analytical.requestedOutputs?.includes("complement") ||
     Array.isArray(analytical.nonMatchingEntities)
   ) {
-    const mentionsComplement =
-      /\bnon-matching\b|\buniverse\b|\bdo not\b|\bdon't\b|\bdoes not\b|\bnon matching\b/i
-        .test(answer);
-
     if (
-      !mentionsComplement &&
+      !answerMentionsComplement(answer, analytical) &&
       analytical.status === "SUPPORTED" &&
       !answerBoundsUnsupported(answer)
     ) {
@@ -200,22 +322,40 @@ function detectAnalyticalAnswerContradiction(
         ? analytical.value
         : undefined;
 
-    if (expected === undefined) {
-      return undefined;
+    if (expected !== undefined) {
+      const candidates =
+        extractCountCandidates(answer);
+
+      /*
+       * Only reject when an explicit non-PEP numeric/word count is present
+       * and none of those candidates equal the analytical value.
+       * Answers that list matched PEPs without restating the count remain valid.
+       */
+      if (
+        candidates.length > 0 &&
+        !candidates.includes(expected)
+      ) {
+        return (
+          `Answer count ${candidates.join(",")} contradicts analytical count ${expected}`
+        );
+      }
     }
 
-    const mentioned =
-      [...answer.matchAll(/\b(\d+)\b/g)]
-        .map(match => Number(match[1]))
-        .filter(value => Number.isFinite(value));
-
+    /*
+     * Compound "how many … and which …": PEPs named in the answer must be
+     * within the structured match/universe sets.
+     */
     if (
-      mentioned.length > 0 &&
-      mentioned.every(value => value !== expected)
+      analytical.requestedOutputs?.includes("list") ||
+      analytical.matchedEntities.length > 0
     ) {
-      return (
-        `Answer count ${mentioned.join(",")} contradicts analytical count ${expected}`
-      );
+      for (const pep of extractMentionedPeps(answer)) {
+        if (!pepAllowedByAnalytical(pep, analytical)) {
+          return (
+            `Answer introduces ${pep} which is not in the analytical result set`
+          );
+        }
+      }
     }
   }
 
@@ -233,9 +373,7 @@ function detectAnalyticalAnswerContradiction(
     }
 
     const mentioned =
-      [...answer.matchAll(/\b(\d+)\b/g)]
-        .map(match => Number(match[1]))
-        .filter(value => Number.isFinite(value));
+      extractCountCandidates(answer);
 
     if (
       mentioned.length > 0 &&
@@ -248,31 +386,8 @@ function detectAnalyticalAnswerContradiction(
   }
 
   if (analytical.operation === "LIST") {
-    const inventedPep =
-      [...answer.matchAll(/\bPEP[\s_-]?(\d+)\b/gi)]
-        .map(match => `PEP-${match[1]}`);
-
-    const allowedIds =
-      new Set([
-        ...analytical.deduplicatedEntityIds,
-        ...(analytical.nonMatchingEntities ?? []).map(item => item.entityId)
-      ]);
-
-    for (const pep of inventedPep) {
-      const grounded =
-        analytical.matchedEntities.some(item =>
-          item.entityId.toLowerCase().includes(pep.toLowerCase().replace("-", "")) ||
-          item.entityId.toLowerCase().includes(pep.toLowerCase()) ||
-          item.label.toLowerCase().includes(pep.toLowerCase())
-        );
-
-      const groundedLoose =
-        [...allowedIds].some(id =>
-          id.toLowerCase().replace(/[\s_-]/g, "")
-            .includes(pep.toLowerCase().replace(/[\s_-]/g, ""))
-        );
-
-      if (!grounded && !groundedLoose) {
+    for (const pep of extractMentionedPeps(answer)) {
+      if (!pepAllowedByAnalytical(pep, analytical)) {
         return (
           `Answer introduces ${pep} which is not in the analytical result set`
         );
@@ -858,7 +973,7 @@ export function verifyAnswerAgainstIntent(
     ) {
       const complementAnswered =
         Array.isArray(analytical?.nonMatchingEntities) &&
-        /\bnon-matching\b|\buniverse\b|\bdo not\b|\bdon't\b/i.test(answer);
+        answerMentionsComplement(answer, analytical);
 
       claims.push({
         predicate: "COMPLEMENT",

@@ -1051,7 +1051,8 @@ implements AnswerVerifier {
       if (
         !intentVerification.matchesIntent ||
         intentVerification.exceedsEvidence ||
-        intentVerification.semantics.status === "NOT_SUPPORTED"
+        intentVerification.semantics.status === "NOT_SUPPORTED" ||
+        intentVerification.semantics.status === "PARTIALLY_SUPPORTED"
       ) {
 
         reasons.push(
@@ -1061,17 +1062,37 @@ implements AnswerVerifier {
         const replacement =
           safeAnalyticalResult(context);
 
+        /*
+         * Re-verify the deterministic analytical rendering. Do not inherit
+         * the generator's contradiction status onto a valid AnalyticalResult.
+         */
+        const replacementVerification =
+          verifyAnswerAgainstIntent(
+            replacement.answer,
+            context
+          );
+
         return {
 
           result:
             withVerificationTrace(
-              replacement,
+              {
+                ...replacement,
+                confidence:
+                  replacementVerification.semantics.status === "NOT_SUPPORTED" ||
+                  context.analyticalResult?.status === "NOT_SUPPORTED" ||
+                  context.analyticalResult?.status === "INSUFFICIENT_EVIDENCE"
+                    ? 0
+                    : replacementVerification.semantics.status === "PARTIALLY_SUPPORTED"
+                      ? Math.min(replacement.confidence, 0.5)
+                      : Math.max(replacement.confidence, 0.5)
+              },
               context,
-              intentVerification,
+              replacementVerification,
               [
-                intentVerification.semantics.status === "SUPPORTED"
+                replacementVerification.semantics.status === "SUPPORTED"
                   ? "Verification: SUPPORTED — analytical answer constrained to deterministic result"
-                  : `Verification: ${intentVerification.semantics.status} — analytical answer constrained`
+                  : `Verification: ${replacementVerification.semantics.status} — analytical answer constrained`
               ]
             ),
 
