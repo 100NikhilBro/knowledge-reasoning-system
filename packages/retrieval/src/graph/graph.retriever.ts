@@ -69,11 +69,19 @@ implements GraphRetriever {
           score:
             this.calculateRelevance(
               query.query,
-              entity
+              entity,
+              query
             ),
 
           source:
-            "graph" as const
+            "graph" as const,
+
+          metadata: {
+            channel: "graph",
+            ...(query.intent
+              ? { intent: query.intent }
+              : {})
+          }
 
         })
       );
@@ -105,7 +113,11 @@ implements GraphRetriever {
 
       "Author",
 
-      "Concern"
+      "Concern",
+
+      "Decision",
+
+      "PythonVersion"
 
     ];
 
@@ -226,7 +238,8 @@ implements GraphRetriever {
 
   private calculateRelevance(
     query: string,
-    entity: KnowledgeEntity
+    entity: KnowledgeEntity,
+    retrievalQuery?: RetrievalQuery
   ): number {
 
     const queryText =
@@ -261,7 +274,7 @@ implements GraphRetriever {
 
 
     /*
-     * Exact entity id match
+     * Exact entity id match (lexical / identifier signal)
      */
 
     if (
@@ -299,8 +312,114 @@ implements GraphRetriever {
     score +=
       matchedTokens.length;
 
+    /*
+     * Intent / claim-aware boosts (bounded).
+     */
+    const entities =
+      retrievalQuery?.entities ?? [];
+
+    for (const phrase of entities) {
+      if (
+        phrase &&
+        (
+          searchableText.includes(this.normalize(phrase)) ||
+          this.normalize(entity.label) === this.normalize(phrase)
+        )
+      ) {
+        score += 4;
+      }
+    }
+
+    for (const claim of retrievalQuery?.claims ?? []) {
+      for (const phrase of [claim.subject, claim.object]) {
+        if (
+          phrase &&
+          searchableText.includes(this.normalize(phrase))
+        ) {
+          score += 3;
+        }
+      }
+    }
+
+    if (
+      retrievalQuery?.intent === "DIRECT_RELATIONSHIP" ||
+      retrievalQuery?.intent === "CONNECTED_RELATIONSHIP" ||
+      retrievalQuery?.intent === "BRIDGE_RELATIONSHIP"
+    ) {
+      /*
+       * Prefer endpoints named in the query for relationship asks.
+       */
+      if (
+        entities.some(phrase =>
+          this.normalize(entity.label) === this.normalize(phrase) ||
+          searchableText.includes(this.normalize(phrase))
+        )
+      ) {
+        score += 5;
+      }
+    }
 
     return score;
+
+  }
+
+  /**
+   * Bounded 1-hop expansion from seed entities.
+   */
+  async expandFromSeeds(
+    seeds: KnowledgeEntity[],
+    options?: {
+      maxNeighborsPerNode?: number;
+      maxTotal?: number;
+    }
+  ): Promise<KnowledgeEntity[]> {
+
+    const maxNeighborsPerNode =
+      options?.maxNeighborsPerNode ?? 5;
+
+    const maxTotal =
+      options?.maxTotal ?? 20;
+
+    const expanded: KnowledgeEntity[] = [];
+    const seen =
+      new Set(seeds.map(seed => seed.id));
+
+    for (const seed of seeds) {
+      if (expanded.length >= maxTotal) {
+        break;
+      }
+
+      try {
+        const neighbors =
+          await this.graph.findNeighbors(
+            seed.type,
+            seed.id
+          );
+
+        for (const neighbor of neighbors.slice(0, maxNeighborsPerNode)) {
+          const entity =
+            neighbor.neighbor;
+
+          if (!entity?.id || seen.has(entity.id)) {
+            continue;
+          }
+
+          seen.add(entity.id);
+          expanded.push(entity);
+
+          if (expanded.length >= maxTotal) {
+            break;
+          }
+        }
+      } catch {
+        /*
+         * Expansion failures must not fail retrieval.
+         */
+        continue;
+      }
+    }
+
+    return expanded;
 
   }
 

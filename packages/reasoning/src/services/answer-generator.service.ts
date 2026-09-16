@@ -22,6 +22,20 @@ import {
   DefaultCitationBuilder
 } from "./citation-builder.service.js";
 
+import {
+  calibrateAnswerConfidence
+} from "../utils/calibrate-confidence.js";
+
+import {
+  executeAnalytical,
+  formatAnalyticalAnswer
+} from "../utils/execute-analytical.js";
+
+import {
+  executeSummarization,
+  formatSummarizationAnswer
+} from "../utils/execute-summarization.js";
+
 /**
  * Deterministic / template-based answer generator.
  * Answers are produced only from the supplied grounded ReasoningContext.
@@ -45,42 +59,76 @@ implements AnswerGenerator {
 
   ): Promise<ReasoningResult> {
 
+    if (
+      !context.analyticalResult &&
+      context.understanding?.intent === "ANALYTICAL" &&
+      context.understanding.analytical
+    ) {
+      context.analyticalResult =
+        executeAnalytical(
+          context.understanding.analytical,
+          context.evidence
+        );
+    }
+
+    if (
+      !context.summarizationResult &&
+      context.understanding?.intent === "SUMMARIZATION" &&
+      context.understanding.summarization
+    ) {
+      const queryText =
+        context.query ?? "";
+
+      context.summarizationResult =
+        executeSummarization(
+          context.understanding.summarization,
+          context.evidence,
+          {
+            query: queryText,
+            includeAnalyticalCount:
+              /\bhow many\b|\bcount\b/i.test(queryText)
+          }
+        );
+    }
+
     const evidenceSet = {
 
       evidence:
         context.evidence,
 
-      comparison:
-        context.comparison
+      ...(context.comparison !== undefined
+        ? { comparison: context.comparison }
+        : {})
 
     };
 
     const answer =
+      context.summarizationResult
+        ? formatSummarizationAnswer(context.summarizationResult)
+        : context.analyticalResult
+          ? formatAnalyticalAnswer(context.analyticalResult)
+          : context.comparison ??
+            context.items
+              .map(
+                item =>
+                  `${item.entityType}: ${item.label}`
+              )
+              .join("\n");
 
-      context.comparison ??
+    const calibrated =
+      calibrateAnswerConfidence({
+        evidenceSet,
+        intent: context.understanding?.intent,
+        analyticalStatus:
+          context.analyticalResult?.status,
+        summarizationStatus:
+          context.summarizationResult?.status
+      });
 
-      context.items
-        .map(
-          item =>
-            `${item.entityType}: ${item.label}`
-        )
-        .join("\n");
-
-    const confidence =
-
-      await this.confidence.calculate(
-
-        evidenceSet
-
-      );
+    await this.confidence.calculate(evidenceSet);
 
     const citations =
-
-      await this.citations.build(
-
-        evidenceSet
-
-      );
+      await this.citations.build(evidenceSet);
 
     return {
 
@@ -89,14 +137,22 @@ implements AnswerGenerator {
       comparison:
         context.comparison,
 
-      confidence,
+      confidence: calibrated.score,
+
+      confidenceLevel: calibrated.level,
+
+      confidenceReasons: calibrated.reasons,
 
       citations,
 
       trace: buildTrace(
-
-        evidenceSet
-
+        evidenceSet,
+        {
+          query: context.query,
+          context,
+          understanding: context.understanding,
+          calibratedConfidence: calibrated
+        }
       )
 
     };

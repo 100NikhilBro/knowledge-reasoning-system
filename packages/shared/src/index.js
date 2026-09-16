@@ -4,6 +4,7 @@ export * from "./contracts/knowledge-document.js";
 export * from "./contracts/query.js";
 export * from "./contracts/response.js";
 export * from "./utils/graph-id.js";
+export * from "./ontology/graph-ontology.js";
 export * from "./contracts/graph/graph-neighbor.js";
 export * from "./contracts/graph/graph-subgraph.js";
 export * from "./contracts/graph/graph-path.js";

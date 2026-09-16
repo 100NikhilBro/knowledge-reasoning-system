@@ -301,6 +301,12 @@ describe(
 
           confidence: 0,
 
+          confidenceLevel: "NONE",
+
+          confidenceReasons: [
+            "no grounded evidence selected"
+          ],
+
           citations: [],
 
           trace: {
@@ -369,11 +375,20 @@ describe(
         expect(result.citations)
           .toEqual(generated.citations);
 
-        expect(result.trace)
-          .toEqual(generated.trace);
-
         expect(result.comparison)
           .toBe(generated.comparison);
+
+        expect(
+          result.trace.steps.some(step =>
+            /^Intent:\s+/i.test(step.description)
+          )
+        ).toBe(true);
+
+        expect(
+          result.trace.steps.some(step =>
+            step.description.includes("Selected Proposal: PEP-484")
+          )
+        ).toBe(true);
 
       }
 

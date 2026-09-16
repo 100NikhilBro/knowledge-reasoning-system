@@ -7,6 +7,18 @@ import type {
   ReasoningContextConfig
 } from "./reasoning-context-config.js";
 
+import type {
+  QueryUnderstanding
+} from "../utils/query-understanding.js";
+
+import type {
+  AnalyticalResult
+} from "../utils/execute-analytical.js";
+
+import type {
+  SummarizationResult
+} from "../utils/execute-summarization.js";
+
 /**
  * Explicit projection of verified evidence used for grounded answer generation.
  * Internal to the reasoning package — not part of the public API contract.
@@ -63,6 +75,12 @@ export interface ReasoningContext {
   query?: string;
 
   /**
+   * Canonical query understanding from P2 (intent, rewrite, entities).
+   * Optional so tests/fixtures can omit it.
+   */
+  understanding?: QueryUnderstanding;
+
+  /**
    * Ordered grounded items (highest-ranked first when synthesizer sorted).
    */
   items: GroundedEvidenceItem[];
@@ -77,6 +95,16 @@ export interface ReasoningContext {
    * Comparison summary only when already produced by the comparison strategy.
    */
   comparison?: string;
+
+  /**
+   * Deterministic analytical result (P6) when intent is ANALYTICAL.
+   */
+  analyticalResult?: AnalyticalResult;
+
+  /**
+   * Deterministic summarization / cross-document synthesis (P7).
+   */
+  summarizationResult?: SummarizationResult;
 
   budget: ReasoningContextBudget;
 

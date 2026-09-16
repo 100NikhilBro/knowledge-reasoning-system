@@ -71,6 +71,18 @@ import {
   filterCompatibleEvidence
 } from "../utils/query-evidence-compatibility.js";
 
+import {
+  understandQuery
+} from "../utils/query-understanding.js";
+
+import {
+  executeAnalytical
+} from "../utils/execute-analytical.js";
+
+import {
+  executeSummarization
+} from "../utils/execute-summarization.js";
+
 
 export class DefaultReasoningEngine
 implements ReasoningEngine {
@@ -265,6 +277,44 @@ implements ReasoningEngine {
 
       context.query =
         request.query;
+
+      context.understanding =
+        understandQuery(request.query);
+
+      /*
+       * Step 5b (P6)
+       * Deterministic analytical execution over grounded evidence.
+       */
+      if (
+        context.understanding.intent === "ANALYTICAL" &&
+        context.understanding.analytical
+      ) {
+        context.analyticalResult =
+          executeAnalytical(
+            context.understanding.analytical,
+            context.evidence
+          );
+      }
+
+      /*
+       * Step 5c (P7)
+       * Deterministic summarization / cross-document synthesis.
+       */
+      if (
+        context.understanding.intent === "SUMMARIZATION" &&
+        context.understanding.summarization
+      ) {
+        context.summarizationResult =
+          executeSummarization(
+            context.understanding.summarization,
+            context.evidence,
+            {
+              query: request.query,
+              includeAnalyticalCount:
+                /\bhow many\b|\bcount\b/i.test(request.query)
+            }
+          );
+      }
 
 
       /*

@@ -19,6 +19,10 @@ import {
   filterCompatibleEvidence
 } from "../utils/query-evidence-compatibility.js";
 
+import {
+  understandQuery
+} from "../utils/query-understanding.js";
+
 export class DefaultEvidenceCollector
 implements EvidenceCollector {
 
@@ -35,13 +39,36 @@ implements EvidenceCollector {
 
   ): Promise<EvidenceSet> {
 
+    const understanding =
+      understandQuery(request.query);
+
     const retrieved =
 
       await this.retrieval.retrieve({
 
         query: request.query,
 
-        topK: request.topK
+        topK: request.topK,
+
+        intent: understanding.intent,
+
+        entities: understanding.entities,
+
+        relationshipRequested:
+          understanding.relationshipRequested,
+
+        claims: understanding.claims.map(claim => ({
+          predicate: claim.predicate,
+          ...(claim.subject
+            ? { subject: claim.subject }
+            : {}),
+          ...(claim.object
+            ? { object: claim.object }
+            : {})
+        })),
+
+        rewrittenRepresentation:
+          understanding.rewrittenRepresentation
 
       });
 

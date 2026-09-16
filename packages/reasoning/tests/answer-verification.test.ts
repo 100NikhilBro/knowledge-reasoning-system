@@ -349,9 +349,9 @@ describe("AnswerVerifier", () => {
       .toBe(generated.confidence);
 
     expect(
-      outcome.result.trace.steps.map(
-        step => step.evidence[0]?.entity.id
-      )
+      outcome.result.trace.steps
+        .filter(step => step.evidence[0]?.entity.id)
+        .map(step => step.evidence[0]?.entity.id)
     ).toEqual(["high", "low"]);
 
     expect(outcome.result.citations)

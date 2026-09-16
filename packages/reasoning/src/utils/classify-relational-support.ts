@@ -11,6 +11,11 @@ import {
   type RelationshipBetweenQuery
 } from "./detect-relationship-between-query.js";
 
+import {
+  detectLogicalConclusionQuery,
+  evaluateLogicalImplication
+} from "./logical-implication.js";
+
 export type RelationalSupportKind =
   | "not_relational"
   | "full"
@@ -349,6 +354,40 @@ export function classifyRelationalSupport(
   query: string | undefined,
   context: ReasoningContext
 ): RelationalSupport {
+
+  /*
+   * Conclusion / implication queries get an explicit logical-support
+   * evaluation before ordinary relational focus matching.
+   */
+  if (detectLogicalConclusionQuery(query)) {
+    const implication =
+      evaluateLogicalImplication(query, context);
+
+    if (implication.support === "SUPPORTED") {
+      return {
+        kind: "full",
+        established: implication.established,
+        missing: []
+      };
+    }
+
+    if (implication.support === "PARTIALLY_SUPPORTED") {
+      return {
+        kind: "partial",
+        established: implication.established,
+        missing: implication.missing
+      };
+    }
+
+    return {
+      kind: "relationship_missing",
+      established: implication.established,
+      missing:
+        implication.missing.length > 0
+          ? implication.missing
+          : ["CONCLUSION"]
+    };
+  }
 
   if (
     !query ||

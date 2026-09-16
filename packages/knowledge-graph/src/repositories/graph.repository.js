@@ -37,12 +37,34 @@ export class GraphRepository {
         await this.executeWrite(`
       MERGE (n:${entity.type} { id: $id })
 
-      SET
+      ON CREATE SET
         n.label = $label,
         n.source = $source,
-        n.confidence = $confidence
+        n.sources = [$source],
+        n.confidence = $confidence,
+        n += $properties
 
-      SET n += $properties
+      ON MATCH SET
+        n.label = $label,
+        n.confidence = CASE
+          WHEN $confidence >= coalesce(n.confidence, 0)
+          THEN $confidence
+          ELSE n.confidence
+        END,
+        n.sources = CASE
+          WHEN $source IS NULL OR $source = ""
+            THEN coalesce(n.sources, [])
+          WHEN n.sources IS NULL AND n.source IS NULL
+            THEN [$source]
+          WHEN n.sources IS NULL AND n.source = $source
+            THEN [$source]
+          WHEN n.sources IS NULL
+            THEN [n.source, $source]
+          WHEN $source IN n.sources
+            THEN n.sources
+          ELSE n.sources + $source
+        END,
+        n += $properties
       `, {
             id: entity.id,
             label: entity.label,
@@ -79,12 +101,34 @@ export class GraphRepository {
 
     MERGE (n:${label} { id: entity.id })
 
-    SET
+    ON CREATE SET
       n.label = entity.label,
       n.source = entity.source,
-      n.confidence = entity.confidence
+      n.sources = [entity.source],
+      n.confidence = entity.confidence,
+      n += entity.properties
 
-    SET n += entity.properties
+    ON MATCH SET
+      n.label = entity.label,
+      n.confidence = CASE
+        WHEN entity.confidence >= coalesce(n.confidence, 0)
+        THEN entity.confidence
+        ELSE n.confidence
+      END,
+      n.sources = CASE
+        WHEN entity.source IS NULL OR entity.source = ""
+          THEN coalesce(n.sources, [])
+        WHEN n.sources IS NULL AND n.source IS NULL
+          THEN [entity.source]
+        WHEN n.sources IS NULL AND n.source = entity.source
+          THEN [entity.source]
+        WHEN n.sources IS NULL
+          THEN [n.source, entity.source]
+        WHEN entity.source IN n.sources
+          THEN n.sources
+        ELSE n.sources + entity.source
+      END,
+      n += entity.properties
     `, {
             entities
         });

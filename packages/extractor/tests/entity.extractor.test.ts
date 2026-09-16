@@ -237,4 +237,38 @@ describe("EntityExtractor", () => {
 
   });
 
+  it("should derive source from document pep metadata", () => {
+
+    const extractor = new EntityExtractor();
+
+    const document = {
+      metadata: {
+        pep: "526",
+        title: "Variable Annotations",
+        author: "Ryan Gonzalez",
+        status: "Final"
+      },
+      sections: [
+        {
+          title: "Abstract",
+          level: 1,
+          content: "This PEP introduces typing annotations."
+        }
+      ],
+      raw: "",
+      warnings: []
+    };
+
+    const entities = extractor.extract(document);
+
+    expect(
+      entities.every(entity => entity.source === "pep-526.md")
+    ).toBe(true);
+
+    expect(
+      entities.find(entity => entity.type === "Feature")?.id
+    ).toBe("feature:typing");
+
+  });
+
 });

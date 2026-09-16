@@ -1,0 +1,926 @@
+import type { ReasoningContext } from "../types/reasoning-context.js";
+
+import {
+  understandQuery,
+  type QueryIntentKind,
+  type QueryUnderstanding
+} from "./query-understanding.js";
+
+import {
+  evaluateLogicalImplication,
+  type ImplicationSupport
+} from "./logical-implication.js";
+
+import {
+  classifyRelationalSupport
+} from "./classify-relational-support.js";
+
+import {
+  detectRelationshipBetweenQuery
+} from "./detect-relationship-between-query.js";
+
+import type {
+  AnalyticalResult
+} from "./execute-analytical.js";
+
+import {
+  detectSummarizationContradiction
+} from "./execute-summarization.js";
+
+/**
+ * Structured claim-level answer semantics for verification (P3).
+ */
+export type AnswerSupportStatus =
+  | "SUPPORTED"
+  | "PARTIALLY_SUPPORTED"
+  | "NOT_SUPPORTED";
+
+export interface StructuredAnswerClaim {
+  subject?: string;
+  predicate: string;
+  object?: string;
+  status: "SUPPORTED" | "NOT_SUPPORTED" | "MISSING";
+}
+
+export interface StructuredAnswerSemantics {
+  intent: QueryIntentKind;
+  status: AnswerSupportStatus;
+  claims: StructuredAnswerClaim[];
+  implicationSupport: ImplicationSupport;
+  reasons: string[];
+}
+
+export interface AnswerIntentVerification {
+  /**
+   * Whether the generated prose adequately answers the requested intent.
+   */
+  matchesIntent: boolean;
+  /**
+   * Whether the answer is stronger than evidence allows.
+   */
+  exceedsEvidence: boolean;
+  semantics: StructuredAnswerSemantics;
+  /**
+   * Concise trace lines for verification decisions.
+   */
+  traceLines: string[];
+}
+
+const FOCUS_ANSWER_CUES: Record<string, RegExp> = {
+  PROPOSED_BY:
+    /\b(?:proposed by|who proposed|author)\b/i,
+  INTRODUCES:
+    /\b(?:introduced|introduces|introduce)\b/i,
+  ADDRESSES:
+    /\b(?:addressed|addresses|address|concern|problem)\b/i,
+  RESULTS_IN:
+    /\b(?:resulted in|results in|decision|accepted|final)\b/i,
+  IMPLEMENTED_IN:
+    /\b(?:implemented in|python version|version)\b/i
+};
+
+function resolveUnderstanding(
+  context: ReasoningContext
+): QueryUnderstanding {
+
+  return (
+    context.understanding ??
+    understandQuery(context.query ?? "")
+  );
+
+}
+
+function answerBoundsUnsupported(
+  answer: string
+): boolean {
+
+  return /does not establish|not established|insufficient evidence|no evidence establishes|analytical result:\s*(?:NOT_SUPPORTED|INSUFFICIENT_EVIDENCE)|summarization:\s*(?:NOT_SUPPORTED|INSUFFICIENT_EVIDENCE)/i
+    .test(answer);
+
+}
+
+/**
+ * Detect when generated prose invents a count/list that conflicts with
+ * the deterministic analytical result.
+ */
+function detectAnalyticalAnswerContradiction(
+  answer: string,
+  analytical: AnalyticalResult
+): string | undefined {
+
+  if (
+    analytical.operation === "COUNT" ||
+    analytical.operation === "DISTINCT_COUNT"
+  ) {
+    const expected =
+      typeof analytical.value === "number"
+        ? analytical.value
+        : undefined;
+
+    if (expected === undefined) {
+      return undefined;
+    }
+
+    const mentioned =
+      [...answer.matchAll(/\b(\d+)\b/g)]
+        .map(match => Number(match[1]))
+        .filter(value => Number.isFinite(value));
+
+    if (
+      mentioned.length > 0 &&
+      mentioned.every(value => value !== expected)
+    ) {
+      return (
+        `Answer count ${mentioned.join(",")} contradicts analytical count ${expected}`
+      );
+    }
+  }
+
+  if (
+    analytical.operation === "MIN" ||
+    analytical.operation === "MAX"
+  ) {
+    const expected =
+      typeof analytical.value === "number"
+        ? analytical.value
+        : undefined;
+
+    if (expected === undefined) {
+      return undefined;
+    }
+
+    const mentioned =
+      [...answer.matchAll(/\b(\d+)\b/g)]
+        .map(match => Number(match[1]))
+        .filter(value => Number.isFinite(value));
+
+    if (
+      mentioned.length > 0 &&
+      !mentioned.includes(expected)
+    ) {
+      return (
+        `Answer numeric value contradicts analytical ${analytical.operation}=${expected}`
+      );
+    }
+  }
+
+  if (analytical.operation === "LIST") {
+    const inventedPep =
+      [...answer.matchAll(/\bPEP[\s_-]?(\d+)\b/gi)]
+        .map(match => `PEP-${match[1]}`);
+
+    for (const pep of inventedPep) {
+      const grounded =
+        analytical.matchedEntities.some(item =>
+          item.entityId.toLowerCase().includes(pep.toLowerCase().replace("-", "")) ||
+          item.entityId.toLowerCase().includes(pep.toLowerCase()) ||
+          item.label.toLowerCase().includes(pep.toLowerCase()) ||
+          String(item.entityId).toLowerCase().includes(
+            pep.toLowerCase().replace("pep-", "pep-")
+          )
+        );
+
+      /*
+       * Allow PEPs that appear in matched canonical ids.
+       */
+      const groundedLoose =
+        analytical.deduplicatedEntityIds.some(id =>
+          id.toLowerCase().replace(/[\s_-]/g, "")
+            .includes(pep.toLowerCase().replace(/[\s_-]/g, ""))
+        );
+
+      if (!grounded && !groundedLoose) {
+        return (
+          `Answer introduces ${pep} which is not in the analytical result set`
+        );
+      }
+    }
+  }
+
+  if (analytical.operation === "EXISTS") {
+    const claimsYes =
+      /\byes\b/i.test(answer);
+
+    const claimsNo =
+      /\bno\b/i.test(answer) ||
+      /\bno matching\b/i.test(answer);
+
+    if (
+      analytical.status === "SUPPORTED_EXISTS" &&
+      claimsNo &&
+      !claimsYes
+    ) {
+      return "Answer denies existence but analytical result found matches";
+    }
+
+    if (
+      analytical.status === "SUPPORTED_NOT_EXISTS" &&
+      claimsYes &&
+      !/not a claim about the entire/i.test(answer)
+    ) {
+      return "Answer claims existence but analytical result found no matches";
+    }
+  }
+
+  return undefined;
+
+}
+
+function mentionsPhrase(
+  answer: string,
+  phrase: string | undefined
+): boolean {
+
+  if (!phrase?.trim()) {
+    return false;
+  }
+
+  const lower =
+    answer.toLowerCase();
+
+  const target =
+    phrase.trim().toLowerCase();
+
+  if (lower.includes(target)) {
+    return true;
+  }
+
+  const compactTarget =
+    target.replace(/[\s_-]+/g, "");
+
+  const compactAnswer =
+    lower.replace(/[\s_-]+/g, "");
+
+  return compactAnswer.includes(compactTarget);
+
+}
+
+function focusCoveredInAnswer(
+  focus: string,
+  answer: string,
+  context: ReasoningContext
+): boolean {
+
+  const cue =
+    FOCUS_ANSWER_CUES[focus];
+
+  if (cue?.test(answer)) {
+    return true;
+  }
+
+  if (focus === "PROPOSED_BY") {
+    return context.items.some(item =>
+      item.entityType === "Author" &&
+      mentionsPhrase(answer, item.label)
+    );
+  }
+
+  return false;
+
+}
+
+function buildCompoundClaims(
+  understanding: QueryUnderstanding,
+  answer: string,
+  relationalEstablished: string[],
+  context: ReasoningContext
+): StructuredAnswerClaim[] {
+
+  const focuses =
+    understanding.relationshipRequested.length > 0
+      ? understanding.relationshipRequested
+      : understanding.subRequests
+          .map(item => item.focus)
+          .filter((focus): focus is string => Boolean(focus));
+
+  return focuses.map(focus => {
+    const evidenceHas =
+      relationalEstablished.includes(focus);
+
+    const answerHas =
+      focusCoveredInAnswer(focus, answer, context);
+
+    if (evidenceHas && answerHas) {
+      return {
+        predicate: focus,
+        status: "SUPPORTED" as const
+      };
+    }
+
+    if (evidenceHas && !answerHas) {
+      return {
+        predicate: focus,
+        status: "MISSING" as const
+      };
+    }
+
+    return {
+      predicate: focus,
+      status: "NOT_SUPPORTED" as const
+    };
+  });
+
+}
+
+/**
+ * Deterministic check: does the generated answer address the user intent
+ * without exceeding evidence strength?
+ */
+export function verifyAnswerAgainstIntent(
+  answer: string,
+  context: ReasoningContext
+): AnswerIntentVerification {
+
+  const understanding =
+    resolveUnderstanding(context);
+
+  const implication =
+    evaluateLogicalImplication(
+      context.query,
+      context
+    );
+
+  const relational =
+    classifyRelationalSupport(
+      context.query,
+      context
+    );
+
+  const reasons: string[] = [];
+  const traceLines: string[] = [];
+  const claims: StructuredAnswerClaim[] = [];
+
+  let matchesIntent =
+    true;
+
+  let exceedsEvidence =
+    false;
+
+  let status: AnswerSupportStatus =
+    "SUPPORTED";
+
+  /*
+   * P1 implication status is authoritative for IMPLICATION intents.
+   */
+  if (understanding.intent === "IMPLICATION") {
+
+    for (const evaluation of implication.claims) {
+      claims.push({
+        subject: evaluation.claim.subject,
+        predicate: evaluation.claim.predicate,
+        object: evaluation.claim.object,
+        status:
+          evaluation.support === "SUPPORTED"
+            ? "SUPPORTED"
+            : "NOT_SUPPORTED"
+      });
+    }
+
+    if (implication.support === "NOT_SUPPORTED") {
+      status = "NOT_SUPPORTED";
+
+      if (
+        !answerBoundsUnsupported(answer) &&
+        answer.trim().length > 0
+      ) {
+        matchesIntent = false;
+        exceedsEvidence = true;
+        reasons.push(
+          "Answer does not report that the requested conclusion is unsupported"
+        );
+        traceLines.push(
+          "Verification: generated claim exceeded evidence"
+        );
+      }
+    } else if (implication.support === "PARTIALLY_SUPPORTED") {
+      status = "PARTIALLY_SUPPORTED";
+
+      const hasSupportedFact =
+        implication.claims.some(item => item.support === "SUPPORTED") &&
+        (
+          /\b(?:introduced|addresses|addressed|proposed)\b/i.test(answer) ||
+          answerBoundsUnsupported(answer)
+        );
+
+      if (!answerBoundsUnsupported(answer)) {
+        matchesIntent = false;
+        exceedsEvidence = true;
+        reasons.push(
+          "Partial implication answer must explicitly bound unsupported claims"
+        );
+        traceLines.push(
+          "Verification: generated claim exceeded evidence"
+        );
+      } else if (!hasSupportedFact && implication.established.length > 0) {
+        matchesIntent = false;
+        reasons.push(
+          "Partial implication answer omits supported evidence"
+        );
+        traceLines.push(
+          "Verification: answer incomplete for requested intent"
+        );
+      }
+    } else if (implication.support === "SUPPORTED") {
+      status = "SUPPORTED";
+
+      /*
+       * True-but-weaker answers that ignore the conclusion ask are rejected.
+       * Require either an explicit establish/support framing or ontology verbs
+       * covering the supported claim predicates.
+       */
+      const coversSupportedClaim =
+        implication.claims
+          .filter(item => item.support === "SUPPORTED")
+          .every(item => {
+            if (
+              item.claim.predicate === "INTRODUCES" ||
+              item.claim.predicate === "ADDRESSES" ||
+              item.claim.predicate === "PROPOSED_BY"
+            ) {
+              return focusCoveredInAnswer(
+                item.claim.predicate,
+                answer,
+                context
+              );
+            }
+
+            return true;
+          });
+
+      if (
+        !coversSupportedClaim &&
+        !/establish|supports the conclusion|supported/i.test(answer)
+      ) {
+        matchesIntent = false;
+        reasons.push(
+          "Answer is factually related but does not address the requested conclusion"
+        );
+        traceLines.push(
+          "Verification: answer does not address requested intent"
+        );
+      }
+    }
+
+    const semantics: StructuredAnswerSemantics = {
+      intent: understanding.intent,
+      status,
+      claims,
+      implicationSupport: implication.support,
+      reasons
+    };
+
+    if (matchesIntent && !exceedsEvidence) {
+      traceLines.push(
+        "Verification: answer matches intent and evidence bounds"
+      );
+    }
+
+    return {
+      matchesIntent,
+      exceedsEvidence,
+      semantics,
+      traceLines
+    };
+
+  }
+
+  /*
+   * Direct relationship: shared-hub connectivity language is a mismatch.
+   */
+  if (understanding.intent === "DIRECT_RELATIONSHIP") {
+
+    const claimsDirect =
+      /\bdirectly\s+(?:related|connected|linked)\b/i.test(answer);
+
+    const claimsHubOnly =
+      /\b(?:connected through|both (?:related|connected)|related via|via\s+PEP)\b/i
+        .test(answer);
+
+    if (
+      relational.kind === "relationship_missing" ||
+      relational.kind === "partial"
+    ) {
+      status = "NOT_SUPPORTED";
+      claims.push({
+        predicate: "DIRECT",
+        status: "NOT_SUPPORTED"
+      });
+
+      if (
+        (claimsDirect || claimsHubOnly) &&
+        !answerBoundsUnsupported(answer)
+      ) {
+        matchesIntent = false;
+        exceedsEvidence = true;
+        reasons.push(
+          "Answer asserts a direct/connected relationship that is not established"
+        );
+        traceLines.push(
+          "Verification: direct relationship mismatch"
+        );
+      }
+    } else {
+      status = "SUPPORTED";
+      claims.push({
+        predicate: "DIRECT",
+        status: "SUPPORTED"
+      });
+    }
+
+  }
+
+  /*
+   * Bridge / connected: both endpoints (and bridge when requested) must appear,
+   * unless the answer explicitly fails closed.
+   */
+  if (
+    understanding.intent === "BRIDGE_RELATIONSHIP" ||
+    understanding.intent === "CONNECTED_RELATIONSHIP"
+  ) {
+
+    const between =
+      detectRelationshipBetweenQuery(context.query ?? "");
+
+    const left =
+      between?.left ??
+      understanding.requireRelationshipBetween?.left ??
+      understanding.entities.find(entity =>
+        !/^PEP-\d+$/i.test(entity)
+      ) ??
+      understanding.entities[0];
+
+    const right =
+      between?.right ??
+      understanding.requireRelationshipBetween?.right ??
+      understanding.entities.filter(entity =>
+        entity !== left && !/^PEP-\d+$/i.test(entity)
+      )[0] ??
+      understanding.entities[1];
+
+    const bridge =
+      between?.bridge ??
+      understanding.bridgeEntity;
+
+    if (relational.kind === "full") {
+      status = "SUPPORTED";
+
+      const leftOk =
+        !left || mentionsPhrase(answer, left);
+
+      const rightOk =
+        !right || mentionsPhrase(answer, right);
+
+      const bridgeMentioned =
+        !bridge ||
+        mentionsPhrase(answer, bridge) ||
+        context.items.some(item =>
+          mentionsPhrase(answer, item.label) &&
+          (
+            mentionsPhrase(item.label, bridge) ||
+            mentionsPhrase(item.entityId, bridge) ||
+            String(item.properties?.pep ?? "") ===
+              bridge.replace(/^PEP-/i, "")
+          )
+        );
+
+      const bridgeOk =
+        understanding.intent !== "BRIDGE_RELATIONSHIP" ||
+        bridgeMentioned ||
+        /\bthrough\b|\bvia\b|\bconnected\b/i.test(answer) ||
+        (
+          leftOk &&
+          rightOk &&
+          /\b(?:introduced|addresses|addressed|proposed)\b/i.test(answer)
+        );
+
+      if (answerBoundsUnsupported(answer)) {
+        matchesIntent = true;
+      } else if (!leftOk || !rightOk || !bridgeOk) {
+        matchesIntent = false;
+        status = "PARTIALLY_SUPPORTED";
+        reasons.push(
+          "Answer does not cover the requested connected/bridge relationship"
+        );
+        traceLines.push(
+          "Verification: answer incomplete for requested relationship"
+        );
+      }
+
+      claims.push({
+        subject: left,
+        predicate:
+          understanding.intent === "BRIDGE_RELATIONSHIP"
+            ? "BRIDGE"
+            : "CONNECTED",
+        object: right,
+        status:
+          matchesIntent
+            ? "SUPPORTED"
+            : "MISSING"
+      });
+    } else {
+      status = "NOT_SUPPORTED";
+      claims.push({
+        predicate:
+          understanding.intent === "BRIDGE_RELATIONSHIP"
+            ? "BRIDGE"
+            : "CONNECTED",
+        status: "NOT_SUPPORTED"
+      });
+    }
+
+  }
+
+  /*
+   * P6 analytical: generated prose cannot override deterministic results.
+   */
+  if (understanding.intent === "ANALYTICAL") {
+
+    const analytical =
+      context.analyticalResult;
+
+    claims.push({
+      predicate: analytical?.operation ?? "ANALYTICAL",
+      status:
+        !analytical ||
+        analytical.status === "NOT_SUPPORTED" ||
+        analytical.status === "INSUFFICIENT_EVIDENCE"
+          ? "NOT_SUPPORTED"
+          : "SUPPORTED"
+    });
+
+    if (
+      !analytical ||
+      analytical.status === "NOT_SUPPORTED" ||
+      analytical.status === "INSUFFICIENT_EVIDENCE"
+    ) {
+      status = "NOT_SUPPORTED";
+
+      if (
+        !answerBoundsUnsupported(answer) &&
+        answer.trim().length > 0 &&
+        !/analytical result:\s*(?:NOT_SUPPORTED|INSUFFICIENT_EVIDENCE)/i
+          .test(answer)
+      ) {
+        matchesIntent = false;
+        exceedsEvidence = true;
+        reasons.push(
+          "Analytical operation is unsupported or insufficient; answer must not invent a calculated result"
+        );
+        traceLines.push(
+          "Verification: analytical result insufficient/not supported"
+        );
+      }
+    } else {
+      const contradiction =
+        detectAnalyticalAnswerContradiction(answer, analytical);
+
+      if (contradiction) {
+        status = "NOT_SUPPORTED";
+        matchesIntent = false;
+        exceedsEvidence = true;
+        reasons.push(contradiction);
+        traceLines.push(
+          "Verification: generated answer contradicted analytical result"
+        );
+      } else {
+        status = "SUPPORTED";
+        matchesIntent = true;
+        traceLines.push(
+          `Verification: analytical ${analytical.operation}=${String(analytical.value)} consistent with answer`
+        );
+      }
+    }
+
+  }
+
+  /*
+   * P7 summarization: generated prose cannot override grounded synthesis.
+   */
+  if (understanding.intent === "SUMMARIZATION") {
+
+    const summarization =
+      context.summarizationResult;
+
+    claims.push({
+      predicate: "SUMMARIZATION",
+      status:
+        !summarization ||
+        summarization.status === "NOT_SUPPORTED" ||
+        summarization.status === "INSUFFICIENT_EVIDENCE"
+          ? "NOT_SUPPORTED"
+          : summarization.status === "PARTIALLY_SUPPORTED"
+            ? "MISSING"
+            : "SUPPORTED"
+    });
+
+    if (
+      !summarization ||
+      summarization.status === "NOT_SUPPORTED" ||
+      summarization.status === "INSUFFICIENT_EVIDENCE"
+    ) {
+      status = "NOT_SUPPORTED";
+
+      if (
+        !answerBoundsUnsupported(answer) &&
+        answer.trim().length > 0 &&
+        !/summarization:\s*(?:NOT_SUPPORTED|INSUFFICIENT_EVIDENCE)/i
+          .test(answer)
+      ) {
+        matchesIntent = false;
+        exceedsEvidence = true;
+        reasons.push(
+          "Summarization is unsupported or insufficient; answer must not invent a corpus summary"
+        );
+        traceLines.push(
+          "Verification: summarization result insufficient/not supported"
+        );
+      }
+    } else {
+      const contradiction =
+        detectSummarizationContradiction(answer, summarization);
+
+      if (contradiction) {
+        status = "NOT_SUPPORTED";
+        matchesIntent = false;
+        exceedsEvidence = true;
+        reasons.push(contradiction);
+        traceLines.push(
+          "Verification: generated answer contradicted summarization synthesis"
+        );
+      } else if (summarization.status === "PARTIALLY_SUPPORTED") {
+        status = "PARTIALLY_SUPPORTED";
+        matchesIntent = true;
+        reasons.push(
+          "Cross-document synthesis was only partially available from grounded evidence"
+        );
+        traceLines.push(
+          "Verification: summarization PARTIALLY_SUPPORTED"
+        );
+      } else {
+        status = "SUPPORTED";
+        matchesIntent = true;
+        traceLines.push(
+          `Verification: summarization mode=${summarization.mode} documents=${summarization.documentCount}`
+        );
+      }
+    }
+
+  }
+
+  /*
+   * Compound: clause-by-clause coverage of requested relationship focuses.
+   */
+  if (understanding.intent === "COMPOUND") {
+
+    const compoundClaims =
+      buildCompoundClaims(
+        understanding,
+        answer,
+        relational.established,
+        context
+      );
+
+    claims.push(...compoundClaims);
+
+    const supportedCount =
+      compoundClaims.filter(item => item.status === "SUPPORTED").length;
+
+    const missingCount =
+      compoundClaims.filter(item => item.status === "MISSING").length;
+
+    const unsupportedCount =
+      compoundClaims.filter(item => item.status === "NOT_SUPPORTED").length;
+
+    if (
+      compoundClaims.length > 0 &&
+      supportedCount === compoundClaims.length
+    ) {
+      status = "SUPPORTED";
+    } else if (supportedCount > 0) {
+      status = "PARTIALLY_SUPPORTED";
+      matchesIntent = false;
+      reasons.push(
+        "Compound answer covers only part of the requested clauses"
+      );
+      traceLines.push(
+        "Verification: compound answer incomplete"
+      );
+    } else if (compoundClaims.length > 0) {
+      status = "NOT_SUPPORTED";
+      matchesIntent = false;
+      reasons.push(
+        "Compound answer does not establish any requested clause"
+      );
+      traceLines.push(
+        "Verification: compound answer incomplete"
+      );
+    }
+
+    if (
+      missingCount > 0 &&
+      unsupportedCount === 0 &&
+      supportedCount > 0
+    ) {
+      status = "PARTIALLY_SUPPORTED";
+    }
+
+  }
+
+  /*
+   * Stronger-than-evidence causal language in the answer body.
+   */
+  if (
+    /\b(?:because|therefore|thus|hence|so that|in order to|to improve|caused|led to)\b/i
+      .test(answer) &&
+    !answerBoundsUnsupported(answer)
+  ) {
+    const hasRelationalEvidence =
+      context.evidence.some(item => item.relationship) ||
+      context.items.some(item => item.relationship);
+
+    if (!hasRelationalEvidence) {
+      exceedsEvidence = true;
+      matchesIntent = false;
+      status = "NOT_SUPPORTED";
+      reasons.push(
+        "Answer uses causal language without relationship evidence"
+      );
+      traceLines.push(
+        "Verification: generated claim exceeded evidence"
+      );
+    } else if (
+      /\bto improve\b|\bbecause\b/i.test(answer) &&
+      understanding.intent !== "FACT"
+    ) {
+      /*
+       * Conservatively treat unexplained causal extras as exceeding evidence
+       * unless the answer already bounds them.
+       */
+      const corpusHasImprove =
+        context.evidence.some(item =>
+          JSON.stringify(item).toLowerCase().includes("improve")
+        );
+
+      if (!corpusHasImprove) {
+        exceedsEvidence = true;
+        matchesIntent = false;
+        if (status === "SUPPORTED") {
+          status = "PARTIALLY_SUPPORTED";
+        }
+        reasons.push(
+          "Answer includes causal explanation stronger than evidence"
+        );
+        traceLines.push(
+          "Verification: generated claim exceeded evidence"
+        );
+      }
+    }
+  }
+
+  if (
+    matchesIntent &&
+    !exceedsEvidence &&
+    traceLines.length === 0
+  ) {
+    traceLines.push(
+      "Verification: answer matches intent and evidence bounds"
+    );
+  }
+
+  return {
+    matchesIntent,
+    exceedsEvidence,
+    semantics: {
+      intent: understanding.intent,
+      status,
+      claims,
+      implicationSupport: implication.support,
+      reasons
+    },
+    traceLines
+  };
+
+}
+
+/**
+ * Format a verification status line for the reasoning trace.
+ */
+export function formatVerificationTraceStep(
+  verification: AnswerIntentVerification
+): string {
+
+  const status =
+    verification.semantics.status;
+
+  if (verification.exceedsEvidence) {
+    return `Verification: ${status} — generated claim exceeded evidence`;
+  }
+
+  if (!verification.matchesIntent) {
+    return `Verification: ${status} — answer does not fully address requested intent`;
+  }
+
+  return `Verification: ${status} — answer matches intent and evidence`;
+
+}

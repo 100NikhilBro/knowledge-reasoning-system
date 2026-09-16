@@ -1,18 +1,14 @@
-// import type { ParsedDocument } from "@knowledge/parser";
-// import type { KnowledgeEntity } from "../models/entity.js";
-// import type { ExtractionRule } from "../contracts/extraction-rule.js";
 import { buildGraphId } from "@knowledge/shared";
+import { resolveDocumentSource } from "../utils/resolve-document-source.js";
+
 export class AuthorRule {
     name = "AuthorRule";
     extract(document) {
-        const slug = document.metadata.author
-            .toLowerCase()
-            .replace(/\s+/g, "-");
         return {
-            id: buildGraphId("Author", slug),
+            id: buildGraphId("Author", document.metadata.author),
             type: "Author",
             label: document.metadata.author,
-            source: "pep-484.md",
+            source: resolveDocumentSource(document),
             confidence: 1.0,
             properties: {
                 name: document.metadata.author

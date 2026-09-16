@@ -1,0 +1,67 @@
+/**
+ * Controlled PEP-domain graph ontology.
+ * Keep in sync with extractor relationship rules and Neo4j labels.
+ */
+export const ALLOWED_ENTITY_TYPES = [
+    "Proposal",
+    "Author",
+    "Feature",
+    "Concern",
+    "Decision",
+    "PythonVersion"
+];
+/**
+ * Allowed extracted/persisted relationship vocabulary.
+ * RELATED_TO / SUPERSEDES remain in the enum but are not accepted here.
+ */
+export const ALLOWED_RELATIONSHIP_TYPES = [
+    "PROPOSED_BY",
+    "INTRODUCES",
+    "ADDRESSES",
+    "RESULTS_IN",
+    "IMPLEMENTED_IN"
+];
+/**
+ * Allowed source → relationship → target combinations.
+ * Anything outside this matrix is rejected before Neo4j.
+ */
+export const RELATIONSHIP_TYPE_CONSTRAINTS = {
+    PROPOSED_BY: {
+        from: ["Proposal"],
+        to: ["Author"]
+    },
+    INTRODUCES: {
+        from: ["Proposal"],
+        to: ["Feature"]
+    },
+    ADDRESSES: {
+        from: ["Proposal"],
+        to: ["Concern"]
+    },
+    RESULTS_IN: {
+        from: ["Proposal"],
+        to: ["Decision"]
+    },
+    IMPLEMENTED_IN: {
+        from: ["Decision"],
+        to: ["PythonVersion"]
+    }
+};
+export function isAllowedEntityType(type) {
+    return ALLOWED_ENTITY_TYPES.includes(type);
+}
+/**
+ * Normalize relationship type spelling/casing to canonical SCREAMING_SNAKE.
+ */
+export function canonicalizeRelationshipType(type) {
+    return type
+        .trim()
+        .toUpperCase()
+        .replace(/[\s-]+/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_+|_+$/g, "");
+}
+export function isAllowedRelationshipType(type) {
+    const canonical = canonicalizeRelationshipType(type);
+    return ALLOWED_RELATIONSHIP_TYPES.includes(canonical);
+}

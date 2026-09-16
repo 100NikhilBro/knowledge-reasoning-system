@@ -10,11 +10,8 @@ export class DecisionRule {
         if (!status) {
             return null;
         }
-        const slug = status
-            .toLowerCase()
-            .replace(/\s+/g, "-");
         return {
-            id: buildGraphId("Decision", slug),
+            id: buildGraphId("Decision", status),
             type: "Decision",
             label: status,
             source: resolveDocumentSource(document),

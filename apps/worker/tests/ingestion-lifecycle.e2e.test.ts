@@ -185,7 +185,15 @@ describe("ingestion lifecycle reliability", () => {
         label: "Sample",
         source: "pep-999.md",
         confidence: 1,
-        properties: {}
+        properties: { pep: "999" }
+      },
+      {
+        id: "decision:accepted",
+        type: "Decision",
+        label: "Accepted",
+        source: "pep-999.md",
+        confidence: 1,
+        properties: { outcome: "Accepted" }
       }
     ];
 
@@ -297,9 +305,9 @@ describe("ingestion lifecycle reliability", () => {
 
     expect(first.completed[0]).toMatchObject({
       documentId: workspace.identity.documentId,
-      entityCount: 1,
+      entityCount: 2,
       relationshipCount: 1,
-      indexedCount: 1
+      indexedCount: 2
     });
 
     await expect(

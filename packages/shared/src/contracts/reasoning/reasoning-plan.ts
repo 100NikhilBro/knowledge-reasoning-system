@@ -55,4 +55,14 @@ export interface ReasoningPlan {
     right: string;
   };
 
+  /**
+   * Canonical query intent from P2 understanding (routing metadata).
+   */
+  intent?: string;
+
+  /**
+   * Deterministic rewritten representation that preserves user constraints.
+   */
+  rewrittenRepresentation?: string;
+
 }

@@ -19,6 +19,12 @@ from "./errors/retrieval-error.js";
 export { mergeResults }
 from "./utils/merge-results.js";
 
+export { mergeResultsWrrf }
+from "./utils/merge-results-wrrf.js";
+
+export { applyRetrievalQualityGates }
+from "./utils/quality-gates.js";
+
 export { analyzeHybridQuery }
 from "./utils/analyze-hybrid-query.js";
 
@@ -26,6 +32,10 @@ export type {
   HybridPreference,
   HybridQueryAnalysis
 } from "./utils/analyze-hybrid-query.js";
+
+export type {
+  RetrievalClaimHint
+} from "./types/retrieval-query.js";
 
 export {
   createRetrievalServiceFromEnv

@@ -97,6 +97,20 @@ function toPublicReasoningResult(
 
   };
 
+  if (result.confidenceLevel !== undefined) {
+
+    response.confidenceLevel =
+      result.confidenceLevel;
+
+  }
+
+  if (result.confidenceReasons !== undefined) {
+
+    response.confidenceReasons =
+      result.confidenceReasons;
+
+  }
+
   if (result.comparison !== undefined) {
 
     response.comparison =

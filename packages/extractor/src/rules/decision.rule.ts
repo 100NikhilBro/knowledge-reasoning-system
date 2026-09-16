@@ -25,16 +25,11 @@ export class DecisionRule implements ExtractionRule {
       return null;
     }
 
-    const slug =
-      status
-        .toLowerCase()
-        .replace(/\s+/g, "-");
-
     return {
 
       id: buildGraphId(
         "Decision",
-        slug
+        status
       ),
 
       type: "Decision",

@@ -13,11 +13,8 @@ export class PythonVersionRule {
         if (!/\d/.test(version)) {
             return null;
         }
-        const slug = version
-            .toLowerCase()
-            .replace(/\s+/g, "-");
         return {
-            id: buildGraphId("PythonVersion", slug),
+            id: buildGraphId("PythonVersion", version),
             type: "PythonVersion",
             label: version,
             source: resolveDocumentSource(document),

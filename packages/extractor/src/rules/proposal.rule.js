@@ -1,4 +1,6 @@
 import { buildGraphId } from "@knowledge/shared";
+import { resolveDocumentSource } from "../utils/resolve-document-source.js";
+
 export class ProposalRule {
     name = "ProposalRule";
     extract(document) {
@@ -6,7 +8,7 @@ export class ProposalRule {
             id: buildGraphId("Proposal", `PEP-${document.metadata.pep}`),
             type: "Proposal",
             label: document.metadata.title,
-            source: "pep-484.md",
+            source: resolveDocumentSource(document),
             confidence: 1.0,
             properties: {
                 pep: document.metadata.pep,

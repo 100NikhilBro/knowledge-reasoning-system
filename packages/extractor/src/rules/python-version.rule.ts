@@ -35,16 +35,11 @@ export class PythonVersionRule implements ExtractionRule {
       return null;
     }
 
-    const slug =
-      version
-        .toLowerCase()
-        .replace(/\s+/g, "-");
-
     return {
 
       id: buildGraphId(
         "PythonVersion",
-        slug
+        version
       ),
 
       type: "PythonVersion",

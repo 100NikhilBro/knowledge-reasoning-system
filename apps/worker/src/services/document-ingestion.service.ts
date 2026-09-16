@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { finalizeExtraction } from "@knowledge/extractor";
+
 import type {
   DocumentFilePort,
   DocumentParserPort,
@@ -136,11 +138,41 @@ export class DocumentIngestionService {
       );
     }
 
-    const entities =
+    const extractedEntities =
       this.entityExtractor.extract(parsed.document);
 
+    const extractedRelationships =
+      this.relationshipExtractor.extract(extractedEntities);
+
+    const finalized =
+      finalizeExtraction(
+        extractedEntities,
+        extractedRelationships
+      );
+
+    const entities =
+      finalized.entities;
+
     const relationships =
-      this.relationshipExtractor.extract(entities);
+      finalized.relationships;
+
+    if (
+      finalized.rejectedRelationships.length > 0 ||
+      finalized.rejectedEntities.length > 0
+    ) {
+      this.logger?.warn("ingestion.graph_quality_rejected", {
+        documentPath,
+        documentId,
+        rejectedEntityCount:
+          finalized.rejectedEntities.length,
+        rejectedRelationshipCount:
+          finalized.rejectedRelationships.length,
+        rejectedRelationshipReasons:
+          finalized.rejectedRelationships.map(
+            item => item.reason
+          )
+      });
+    }
 
     if (
       this.initializeGraphSchema &&

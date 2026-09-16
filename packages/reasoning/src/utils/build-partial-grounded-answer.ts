@@ -16,6 +16,11 @@ import {
   classifyRelationalSupport
 } from "./classify-relational-support.js";
 
+import {
+  detectLogicalConclusionQuery,
+  evaluateLogicalImplication
+} from "./logical-implication.js";
+
 /**
  * Explicit insufficiency clause — only discourse / non-factual wording.
  * Used when evidence supports entity labels but not relational synthesis,
@@ -373,7 +378,11 @@ function missingRelationshipClause(
     (
       missing[0] === "CONNECTED" ||
       missing[0] === "DIRECT" ||
-      missing[0] === "BRIDGE"
+      missing[0] === "BRIDGE" ||
+      missing[0] === "CONCLUSION" ||
+      missing[0] === "IMPROVES" ||
+      missing[0] === "CAUSAL" ||
+      missing[0] === "RELATED"
     )
   ) {
     return RELATIONSHIP_NOT_ESTABLISHED_CLAUSE;
@@ -385,7 +394,13 @@ function missingRelationshipClause(
         type =>
           type !== "CONNECTED" &&
           type !== "DIRECT" &&
-          type !== "BRIDGE"
+          type !== "BRIDGE" &&
+          type !== "CONCLUSION" &&
+          type !== "IMPROVES" &&
+          type !== "CAUSAL" &&
+          type !== "RELATED" &&
+          type !== "EVIDENCE" &&
+          type !== "CLAIM"
       )
       .join(", ");
 
@@ -394,6 +409,114 @@ function missingRelationshipClause(
   }
 
   return `The available evidence does not establish the requested ${labels} relationship.`;
+
+}
+
+/**
+ * Grounded answer driven by the explicit implication decision.
+ * Generator-facing copy must not upgrade unsupported conclusions.
+ */
+export function buildImplicationGroundedAnswer(
+  context: ReasoningContext
+): string {
+
+  const decision =
+    evaluateLogicalImplication(
+      context.query,
+      context
+    );
+
+  if (decision.support === "NOT_APPLICABLE") {
+    const identity =
+      buildIdentityGroundedAnswer(context).trim();
+
+    return identity.length > 0
+      ? `${identity} ${INSUFFICIENT_EVIDENCE_CLAUSE}`
+      : "";
+  }
+
+  const supportedTypes =
+    new Set(
+      decision.claims
+        .filter(item => item.support === "SUPPORTED")
+        .map(item => item.claim.predicate)
+        .filter(type =>
+          type !== "IMPROVES" &&
+          type !== "CAUSAL" &&
+          type !== "RELATED" &&
+          type !== "DIRECT" &&
+          type !== "CONNECTED" &&
+          type !== "BRIDGE" &&
+          type !== "CONCLUSION"
+        )
+    );
+
+  const establishedFacts =
+    supportedTypes.size > 0
+      ? buildRelationalGroundedAnswer(
+          context,
+          supportedTypes
+        )
+      : undefined;
+
+  const unsupportedReasons =
+    decision.claims
+      .filter(item => item.support === "NOT_SUPPORTED")
+      .map(item => {
+        const { claim } = item;
+
+        if (
+          claim.predicate === "DIRECT" ||
+          claim.predicate === "RELATED"
+        ) {
+          return `The available evidence does not establish that ${claim.subject} is directly related to ${claim.object}.`;
+        }
+
+        if (
+          claim.predicate === "IMPROVES" ||
+          claim.predicate === "CAUSAL"
+        ) {
+          return claim.object
+            ? `The available evidence does not establish to improve ${claim.object}.`
+            : `The available evidence does not establish the requested causal conclusion.`;
+        }
+
+        if (claim.subject && claim.object) {
+          return `The available evidence does not establish ${claim.subject} → ${claim.predicate} → ${claim.object}.`;
+        }
+
+        return item.reason;
+      });
+
+  if (decision.support === "SUPPORTED") {
+    if (establishedFacts) {
+      return `The evidence establishes that ${establishedFacts.replace(/\.$/, "")}.`;
+    }
+
+    return decision.summary;
+  }
+
+  if (decision.support === "PARTIALLY_SUPPORTED") {
+    const parts =
+      [
+        establishedFacts
+          ? `The evidence establishes that ${establishedFacts.replace(/\.$/, "")}.`
+          : undefined,
+        ...unsupportedReasons
+      ]
+        .filter(
+          (part): part is string =>
+            Boolean(part && part.trim())
+        );
+
+    return parts.join(" ");
+  }
+
+  if (unsupportedReasons.length > 0) {
+    return unsupportedReasons.join(" ");
+  }
+
+  return buildRelationshipNotEstablishedAnswer(context);
 
 }
 
@@ -417,6 +540,10 @@ export function buildPartialGroundedAnswer(
 
   if (context.evidence.length === 0) {
     return "";
+  }
+
+  if (detectLogicalConclusionQuery(context.query)) {
+    return buildImplicationGroundedAnswer(context);
   }
 
   const support =

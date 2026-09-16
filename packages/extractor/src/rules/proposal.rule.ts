@@ -4,42 +4,44 @@ import type { ExtractionRule } from "../contracts/extraction-rule.js";
 
 import { buildGraphId } from "@knowledge/shared";
 
+import { resolveDocumentSource } from "../utils/resolve-document-source.js";
+
 export class ProposalRule implements ExtractionRule {
 
-readonly name = "ProposalRule";
+  readonly name = "ProposalRule";
 
   extract(document: ParsedDocument): KnowledgeEntity {
 
     return {
 
-  id: buildGraphId(
-  "Proposal",
-  `PEP-${document.metadata.pep}`
-),
+      id: buildGraphId(
+        "Proposal",
+        `PEP-${document.metadata.pep}`
+      ),
 
-  type: "Proposal",
+      type: "Proposal",
 
-  label: document.metadata.title,
+      label: document.metadata.title,
 
-  source: "pep-484.md",
+      source: resolveDocumentSource(document),
 
-  confidence: 1.0,
+      confidence: 1.0,
 
-  properties: {
+      properties: {
 
-    pep: document.metadata.pep,
+        pep: document.metadata.pep,
 
-    title: document.metadata.title,
+        title: document.metadata.title,
 
-    status: document.metadata.status,
+        status: document.metadata.status,
 
-    type: document.metadata.type,
+        type: document.metadata.type,
 
-    created: document.metadata.created
+        created: document.metadata.created
 
-  }
+      }
 
-};
+    };
 
   }
 

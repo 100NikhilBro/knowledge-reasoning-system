@@ -89,12 +89,18 @@ export function mergeResults(
 
   vectorResults: RetrievalResult[],
 
-  query = ""
+  query = "",
+
+  options?: {
+    intent?: string;
+  }
 
 ): RetrievalResult[] {
 
   const analysis =
-    analyzeHybridQuery(query);
+    analyzeHybridQuery(query, {
+      intent: options?.intent
+    });
 
   const weights =
     preferenceWeights(analysis.preference);

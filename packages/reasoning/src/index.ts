@@ -76,6 +76,7 @@ export {
 
 export {
   buildPartialGroundedAnswer,
+  buildImplicationGroundedAnswer,
   buildIdentityGroundedAnswer,
   buildRelationalGroundedAnswer,
   buildRelationshipNotEstablishedAnswer,
@@ -112,6 +113,53 @@ export type {
 } from "./utils/classify-relational-support.js";
 
 export {
+  detectLogicalConclusionQuery,
+  extractConclusionClause,
+  extractLogicalClaims,
+  evaluateLogicalImplication,
+  contextHasTypedEdge,
+  formatImplicationTraceStep
+} from "./utils/logical-implication.js";
+
+export type {
+  ImplicationSupport,
+  LogicalClaim,
+  ClaimEvaluation,
+  ImplicationDecision
+} from "./utils/logical-implication.js";
+
+export {
+  normalizeQueryText,
+  extractQueryEntities,
+  classifyQueryIntent,
+  understandQuery,
+  formatIntentTraceStep
+} from "./utils/query-understanding.js";
+
+export type {
+  QueryIntentKind,
+  QuerySubRequest,
+  AnalyticalSpec,
+  AnalyticalOperation,
+  AnalyticalFilter,
+  SummarizationSpec,
+  SummarizationMode,
+  QueryUnderstanding
+} from "./utils/query-understanding.js";
+
+export {
+  verifyAnswerAgainstIntent,
+  formatVerificationTraceStep
+} from "./utils/answer-intent-verification.js";
+
+export type {
+  AnswerSupportStatus,
+  StructuredAnswerClaim,
+  StructuredAnswerSemantics,
+  AnswerIntentVerification
+} from "./utils/answer-intent-verification.js";
+
+export {
   buildGroundedCorpus,
   corpusAttests
 } from "./utils/build-grounded-corpus.js";
@@ -140,6 +188,60 @@ export {
   computePartialGroundedConfidence,
   clampUnitInterval
 } from "./utils/compute-grounded-confidence.js";
+
+export {
+  interpretGraphPath,
+  interpretEvidencePaths,
+  formatPathInterpretationTraceStep,
+  toPathInterpretationSummary
+} from "./utils/interpret-path.js";
+
+export type {
+  PathInterpretation,
+  PathInterpretationKind
+} from "./utils/interpret-path.js";
+
+export {
+  calibrateAnswerConfidence,
+  calibrateFromContext,
+  confidenceLevelFromScore,
+  formatConfidenceTraceStep
+} from "./utils/calibrate-confidence.js";
+
+export type {
+  CalibratedConfidence,
+  ConfidenceCalibrationInput,
+  ConfidenceLevel
+} from "./utils/calibrate-confidence.js";
+
+export {
+  executeAnalytical,
+  dedupeEvidenceByEntityId,
+  formatAnalyticalAnswer,
+  formatAnalyticalTraceStep
+} from "./utils/execute-analytical.js";
+
+export type {
+  AnalyticalResult,
+  AnalyticalStatus,
+  AnalyticalMatchedItem
+} from "./utils/execute-analytical.js";
+
+export {
+  executeSummarization,
+  groupEvidenceByDocument,
+  formatSummarizationAnswer,
+  formatSummarizationTraceStep,
+  detectSummarizationContradiction
+} from "./utils/execute-summarization.js";
+
+export type {
+  SummarizationResult,
+  SummarizationStatus,
+  DocumentEvidenceGroup,
+  SharedEntityRef,
+  SynthesisClaim
+} from "./utils/execute-summarization.js";
 
 
 export {

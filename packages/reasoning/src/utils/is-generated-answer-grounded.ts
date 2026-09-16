@@ -7,7 +7,8 @@ import {
 
 import {
   buildPartialGroundedAnswer,
-  buildRelationshipNotEstablishedAnswer
+  buildRelationshipNotEstablishedAnswer,
+  buildImplicationGroundedAnswer
 } from "./build-partial-grounded-answer.js";
 
 /**
@@ -145,7 +146,8 @@ export function isGeneratedAnswerGrounded(
   if (
     answer === templateGroundedAnswer(context) ||
     answer === buildPartialGroundedAnswer(context) ||
-    answer === buildRelationshipNotEstablishedAnswer(context)
+    answer === buildRelationshipNotEstablishedAnswer(context) ||
+    answer === buildImplicationGroundedAnswer(context)
   ) {
     return true;
   }

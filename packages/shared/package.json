@@ -16,11 +16,13 @@
   },
 
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "vitest --run"
   },
 
   "devDependencies": {
     "@types/node": "^26.1.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

@@ -69,6 +69,22 @@ describe("analyzeHybridQuery", () => {
     ).toBe("balanced");
   });
 
+  it("uses P2 intent for FACT paraphrases without identifiers", () => {
+    expect(
+      analyzeHybridQuery("Python type annotation proposal", {
+        intent: "FACT"
+      }).preference
+    ).toBe("vector");
+  });
+
+  it("uses P2 intent for relationship asks", () => {
+    expect(
+      analyzeHybridQuery("Tell me about Typing and Readability", {
+        intent: "DIRECT_RELATIONSHIP"
+      }).preference
+    ).toBe("graph");
+  });
+
 });
 
 describe("mergeResults", () => {

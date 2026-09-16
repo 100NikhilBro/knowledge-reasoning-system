@@ -6,3 +6,8 @@ export * from "./models/relationship.js";
 
 export * from "./contracts/extraction-rule.js";
 export * from "./contracts/relationship-rule.js";
+
+export * from "./pipeline/finalize-extraction.js";
+
+export * from "./validators/entity.validator.js";
+export * from "./validators/relationship.validator.js";

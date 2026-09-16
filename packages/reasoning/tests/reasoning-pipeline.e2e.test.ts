@@ -85,6 +85,8 @@ import type {
 const PUBLIC_RESULT_KEYS = new Set([
   "answer",
   "confidence",
+  "confidenceLevel",
+  "confidenceReasons",
   "citations",
   "trace",
   "comparison",
@@ -455,8 +457,13 @@ describe("End-to-end reasoning pipeline", () => {
         )
     ).toBe(true);
 
+    expect(result.trace.steps[0]?.description)
+      .toMatch(/^Intent:/i);
+
     expect(
-      result.trace.steps[0]?.evidence[0]?.entity.id
+      result.trace.steps.find(step =>
+        step.evidence[0]?.entity.id
+      )?.evidence[0]?.entity.id
     ).toBe("proposal:PEP-484");
 
     expect(result.confidence)

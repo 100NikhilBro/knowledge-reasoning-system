@@ -29,16 +29,19 @@ function createDocument(): ParsedDocument {
 }
 
 function createEntity(
-  id: string
+  id: string,
+  type: KnowledgeEntity["type"] = "Proposal",
+  label = "Type Hints",
+  properties: Record<string, unknown> = { pep: "484" }
 ): KnowledgeEntity {
 
   return {
     id,
-    type: "Proposal",
-    label: "Type Hints",
+    type,
+    label,
     source: "pep-484.md",
     confidence: 1,
-    properties: { pep: "484" }
+    properties
   };
 
 }
@@ -47,7 +50,7 @@ function createRelationship(): KnowledgeRelationship {
 
   return {
     from: "proposal:PEP-484",
-    to: "author:guido",
+    to: "author:guido-van-rossum",
     type: "PROPOSED_BY",
     confidence: 1
   };
@@ -60,8 +63,24 @@ describe("DocumentIngestionService", () => {
 
     const document = createDocument();
     const entities = [
-      createEntity("proposal:PEP-484"),
-      createEntity("feature:typing")
+      createEntity(
+        "proposal:PEP-484",
+        "Proposal",
+        "Type Hints",
+        { pep: "484" }
+      ),
+      createEntity(
+        "author:guido-van-rossum",
+        "Author",
+        "Guido van Rossum",
+        { name: "Guido van Rossum" }
+      ),
+      createEntity(
+        "feature:typing",
+        "Feature",
+        "Typing",
+        { name: "Typing" }
+      )
     ];
     const relationships = [createRelationship()];
 
@@ -92,7 +111,7 @@ describe("DocumentIngestionService", () => {
 
     const indexer = {
       index: vi.fn(async () => ({
-        indexed: 2,
+        indexed: 3,
         entityIds: entities.map(entity => entity.id)
       }))
     };
@@ -134,7 +153,12 @@ describe("DocumentIngestionService", () => {
 
     expect(graph.ingest).toHaveBeenCalledWith(
       entities,
-      relationships
+      [
+        {
+          ...relationships[0],
+          properties: {}
+        }
+      ]
     );
 
     expect(indexer.index).toHaveBeenCalledWith(
@@ -153,11 +177,12 @@ describe("DocumentIngestionService", () => {
       documentPath:
         "knowledge_state/raw/python-peps/pep-484.md",
       documentId: "pep-484",
-      entityCount: 2,
+      entityCount: 3,
       relationshipCount: 1,
-      indexedCount: 2,
+      indexedCount: 3,
       entityIds: [
         "proposal:PEP-484",
+        "author:guido-van-rossum",
         "feature:typing"
       ]
     });
