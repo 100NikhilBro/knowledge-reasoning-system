@@ -26,6 +26,14 @@ export interface AnalyticalMatchedItem {
   entityType: string;
   source: string;
   relationshipType?: string;
+  /**
+   * Relationship object entity id when the match came from a typed edge.
+   */
+  objectEntityId?: string;
+  /**
+   * Relationship object label when available.
+   */
+  objectLabel?: string;
   numericValue?: number;
 }
 
@@ -43,6 +51,22 @@ export interface AnalyticalResult {
    * Matched canonical entities (post-dedup) that produced the result.
    */
   matchedEntities: AnalyticalMatchedItem[];
+  /**
+   * Explicit universe of candidate subjects when complement analysis ran.
+   */
+  universeEntityIds?: string[];
+  /**
+   * Non-matching subjects from the universe (negative/complement set).
+   */
+  nonMatchingEntities?: AnalyticalMatchedItem[];
+  /**
+   * Whether the requested relationship object/target was established in evidence.
+   */
+  requestedTargetEstablished?: boolean;
+  /**
+   * Echo of requested outputs for verification.
+   */
+  requestedOutputs?: Array<"count" | "list" | "complement">;
   /**
    * Pre-dedup evidence entity ids observed (audit).
    */
@@ -62,34 +86,81 @@ export interface AnalyticalResult {
   evidence: Evidence[];
 }
 
-function phraseMatch(
+function compactPhrase(
+  value: string
+): string {
+
+  return value
+    .toLowerCase()
+    .replace(/[^\w]+/g, "");
+
+}
+
+function idLocalName(
+  id: string
+): string {
+
+  const parts =
+    id.split(":");
+
+  return parts[parts.length - 1] ?? id;
+
+}
+
+/**
+ * Exact analytical object/target match.
+ * Equality on compact label / local id / name — not broad substring matching.
+ */
+export function exactObjectMatch(
   entity: KnowledgeEntity,
   phrase: string
 ): boolean {
 
   const needle =
-    phrase.toLowerCase().replace(/[^\w]/g, "");
+    compactPhrase(phrase);
 
   if (!needle) {
     return false;
   }
 
-  const haystack =
+  const candidates =
     [
-      entity.id,
       entity.label,
-      ...Object.values(entity.properties ?? {})
+      idLocalName(entity.id),
+      typeof entity.properties?.name === "string"
+        ? entity.properties.name
+        : undefined
     ]
-      .filter(
-        value =>
-          typeof value === "string" ||
-          typeof value === "number"
-      )
-      .join(" ")
-      .toLowerCase()
-      .replace(/[^\w]/g, "");
+      .filter((value): value is string => Boolean(value?.trim()))
+      .map(compactPhrase);
 
-  return haystack.includes(needle);
+  return candidates.some(candidate => candidate === needle);
+
+}
+
+function phraseMatch(
+  entity: KnowledgeEntity,
+  phrase: string
+): boolean {
+
+  /*
+   * Legacy soft path — still used only when requireObjectMatch is false.
+   * Prefer exactObjectMatch for relationship object binding.
+   */
+  return exactObjectMatch(entity, phrase) ||
+    compactPhrase(
+      [
+        entity.id,
+        entity.label,
+        ...Object.values(entity.properties ?? {})
+      ]
+        .filter(
+          value =>
+            typeof value === "string" ||
+            typeof value === "number"
+        )
+        .join(" ")
+    ).includes(compactPhrase(phrase));
 
 }
 
@@ -200,7 +271,8 @@ export function dedupeEvidenceByEntityId(
 function insufficient(
   spec: AnalyticalSpec,
   evidence: Evidence[],
-  explanation: string
+  explanation: string,
+  extras: Partial<AnalyticalResult> = {}
 ): AnalyticalResult {
 
   return {
@@ -214,7 +286,9 @@ function insufficient(
     numericField: spec.numericField,
     scope: spec.scope ?? "current grounded corpus",
     explanation,
-    evidence: []
+    evidence: [],
+    requestedOutputs: spec.requestedOutputs,
+    ...extras
   };
 
 }
@@ -222,7 +296,8 @@ function insufficient(
 function notSupported(
   spec: AnalyticalSpec,
   evidence: Evidence[],
-  explanation: string
+  explanation: string,
+  extras: Partial<AnalyticalResult> = {}
 ): AnalyticalResult {
 
   return {
@@ -236,8 +311,31 @@ function notSupported(
     numericField: spec.numericField,
     scope: spec.scope ?? "current grounded corpus",
     explanation,
-    evidence: []
+    evidence: [],
+    requestedOutputs: spec.requestedOutputs,
+    ...extras
   };
+
+}
+
+function objectEndpointMatches(
+  entity: KnowledgeEntity,
+  filter: AnalyticalFilter
+): boolean {
+
+  if (filter.objectPhrase && filter.requireObjectMatch) {
+    return exactObjectMatch(entity, filter.objectPhrase);
+  }
+
+  if (filter.objectPhrase) {
+    return exactObjectMatch(entity, filter.objectPhrase);
+  }
+
+  if (filter.relatedEntityPhrase) {
+    return phraseMatch(entity, filter.relatedEntityPhrase);
+  }
+
+  return true;
 
 }
 
@@ -250,6 +348,8 @@ function selectMatchingSubjects(
 ): {
   matched: AnalyticalMatchedItem[];
   contributingEvidence: Evidence[];
+  requestedTargetEstablished: boolean;
+  universe: AnalyticalMatchedItem[];
 } {
 
   const entities =
@@ -270,9 +370,35 @@ function selectMatchingSubjects(
 
   const contributing: Evidence[] = [];
 
+  const universeById =
+    new Map<string, AnalyticalMatchedItem>();
+
+  for (const entity of entities.values()) {
+    if (
+      subjectType &&
+      entity.type !== subjectType
+    ) {
+      continue;
+    }
+
+    universeById.set(entity.id, {
+      entityId: entity.id,
+      label: entity.label,
+      entityType: entity.type,
+      source: entity.source,
+      ...(spec.numericField
+        ? {
+            numericValue:
+              parseNumericProperty(entity, spec.numericField)
+          }
+        : {})
+    });
+  }
+
   function considerSubject(
     entity: KnowledgeEntity,
-    relationshipType?: string
+    relationshipType?: string,
+    objectEntity?: KnowledgeEntity
   ): void {
 
     if (
@@ -294,6 +420,12 @@ function selectMatchingSubjects(
       ...(relationshipType
         ? { relationshipType }
         : {}),
+      ...(objectEntity
+        ? {
+            objectEntityId: objectEntity.id,
+            objectLabel: objectEntity.label
+          }
+        : {}),
       ...(spec.numericField
         ? {
             numericValue:
@@ -303,9 +435,23 @@ function selectMatchingSubjects(
     });
   }
 
+  let requestedTargetEstablished =
+    true;
+
+  if (
+    filter?.requireObjectMatch &&
+    filter.objectPhrase
+  ) {
+    requestedTargetEstablished =
+      [...entities.values()].some(entity =>
+        exactObjectMatch(entity, filter.objectPhrase!)
+      );
+  }
+
   /*
    * Relationship-filtered selection: subject is the Proposal (from) side
    * for INTRODUCES/ADDRESSES/PROPOSED_BY when counting PEPs.
+   * Object constraints bind only to the relationship object (`to`).
    */
   if (filter?.relationshipType) {
     for (const relationship of relationships) {
@@ -323,12 +469,15 @@ function selectMatchingSubjects(
         continue;
       }
 
-      if (filter.relatedEntityPhrase) {
-        const relatedOk =
-          phraseMatch(to, filter.relatedEntityPhrase) ||
-          phraseMatch(from, filter.relatedEntityPhrase);
-
-        if (!relatedOk) {
+      if (
+        filter.objectPhrase ||
+        filter.relatedEntityPhrase
+      ) {
+        /*
+         * Exact/soft object binding applies to the relationship object only.
+         * Never let a subject-side lexical hit satisfy the object constraint.
+         */
+        if (!objectEndpointMatches(to, filter)) {
           continue;
         }
       }
@@ -355,7 +504,18 @@ function selectMatchingSubjects(
         continue;
       }
 
-      considerSubject(subject, relationship.type);
+      /*
+       * Prefer the ontology direction: subject owns the outbound edge.
+       */
+      if (
+        subjectType &&
+        from.type === subjectType &&
+        subject.id !== from.id
+      ) {
+        continue;
+      }
+
+      considerSubject(subject, relationship.type, to);
 
       for (const item of evidence) {
         if (
@@ -373,7 +533,9 @@ function selectMatchingSubjects(
 
     return {
       matched: [...matchedById.values()],
-      contributingEvidence: dedupeEvidenceByEntityId(contributing)
+      contributingEvidence: dedupeEvidenceByEntityId(contributing),
+      requestedTargetEstablished,
+      universe: [...universeById.values()]
     };
   }
 
@@ -392,6 +554,15 @@ function selectMatchingSubjects(
     }
 
     if (
+      filter?.objectPhrase &&
+      filter.requireObjectMatch &&
+      !exactObjectMatch(entity, filter.objectPhrase)
+    ) {
+      continue;
+    }
+
+    if (
+      !filter?.objectPhrase &&
       filter?.relatedEntityPhrase &&
       !phraseMatch(entity, filter.relatedEntityPhrase)
     ) {
@@ -404,7 +575,9 @@ function selectMatchingSubjects(
 
   return {
     matched: [...matchedById.values()],
-    contributingEvidence: dedupeEvidenceByEntityId(contributing)
+    contributingEvidence: dedupeEvidenceByEntityId(contributing),
+    requestedTargetEstablished,
+    universe: [...universeById.values()]
   };
 
 }
@@ -458,11 +631,110 @@ export function executeAnalytical(
     );
   }
 
-  const { matched, contributingEvidence } =
+  const {
+    matched,
+    contributingEvidence,
+    requestedTargetEstablished,
+    universe
+  } =
     selectMatchingSubjects(evidence, spec);
+
+  if (
+    spec.filter?.requireObjectMatch &&
+    spec.filter.objectPhrase &&
+    !requestedTargetEstablished
+  ) {
+    if (spec.operation === "EXISTS") {
+      /*
+       * Existence asks may conclude absence among grounded evidence without
+       * requiring the object node to be present as a standalone entity.
+       */
+    } else {
+      /*
+       * Fail closed: do not broaden to unrelated relationship objects.
+       * Report zero matches with an explicit unresolved-target flag.
+       */
+      const emptyComplement = {
+        requestedTargetEstablished: false,
+        requestedOutputs: spec.requestedOutputs,
+        universeEntityIds: universe.map(item => item.entityId),
+        ...(spec.includeComplement
+          ? {
+              nonMatchingEntities:
+                spec.includeComplement && universe.length === 0
+                  ? []
+                  : universe
+            }
+          : {})
+      };
+
+      if (spec.includeComplement && universe.length === 0) {
+        return insufficient(
+          spec,
+          evidence,
+          "Cannot compute a negative/complement set because no explicit subject universe is available in grounded evidence.",
+          emptyComplement
+        );
+      }
+
+      return {
+        operation: spec.operation,
+        status: "SUPPORTED",
+        value: 0,
+        matchedEntities: [],
+        inputEntityIds,
+        deduplicatedEntityIds: [],
+        subject: spec.target,
+        filters: spec.filter,
+        scope,
+        explanation:
+          `Requested analytical target "${spec.filter.objectPhrase}" could not be established in grounded evidence; ` +
+          `returning zero matches without broadening to unrelated entities.`,
+        evidence: [],
+        ...emptyComplement
+      };
+    }
+  }
+
+  const matchedIds =
+    new Set(matched.map(item => item.entityId));
+
+  const nonMatching =
+    universe.filter(item => !matchedIds.has(item.entityId));
+
+  if (spec.includeComplement) {
+    if (universe.length === 0) {
+      return insufficient(
+        spec,
+        evidence,
+        "Cannot compute a negative/complement set because no explicit subject universe is available in grounded evidence.",
+        {
+          requestedTargetEstablished,
+          universeEntityIds: [],
+          nonMatchingEntities: []
+        }
+      );
+    }
+  }
 
   const deduplicatedEntityIds =
     matched.map(item => item.entityId);
+
+  const complementFields = {
+    requestedTargetEstablished,
+    requestedOutputs: spec.requestedOutputs,
+    universeEntityIds: universe.map(item => item.entityId),
+    ...(spec.includeComplement
+      ? { nonMatchingEntities: nonMatching }
+      : {})
+  };
+
+  const objectClause =
+    spec.filter?.objectPhrase
+      ? ` object=${spec.filter.objectPhrase}`
+      : spec.filter?.relatedEntityPhrase
+        ? ` related to ${spec.filter.relatedEntityPhrase}`
+        : "";
 
   if (
     spec.operation === "COUNT" ||
@@ -483,11 +755,13 @@ export function executeAnalytical(
         (spec.filter?.relationshipType
           ? ` with ${spec.filter.relationshipType}`
           : "") +
-        (spec.filter?.relatedEntityPhrase
-          ? ` related to ${spec.filter.relatedEntityPhrase}`
+        objectClause +
+        (spec.includeComplement
+          ? `; non-matching ${nonMatching.length} of universe ${universe.length}`
           : "") +
         ` within ${scope}.`,
-      evidence: contributingEvidence
+      evidence: contributingEvidence,
+      ...complementFields
     };
   }
 
@@ -504,8 +778,11 @@ export function executeAnalytical(
         filters: spec.filter,
         scope,
         explanation:
-          `No matching ${spec.target ?? "entities"} found in ${scope} for the requested filter.`,
-        evidence: []
+          `No matching ${spec.target ?? "entities"} found in ${scope} for the requested filter` +
+          objectClause +
+          ".",
+        evidence: [],
+        ...complementFields
       };
     }
 
@@ -520,8 +797,11 @@ export function executeAnalytical(
       filters: spec.filter,
       scope,
       explanation:
-        `Listed ${matched.length} matching ${spec.target ?? "entities"} within ${scope}.`,
-      evidence: contributingEvidence
+        `Listed ${matched.length} matching ${spec.target ?? "entities"} within ${scope}` +
+        objectClause +
+        ".",
+      evidence: contributingEvidence,
+      ...complementFields
     };
   }
 
@@ -538,8 +818,11 @@ export function executeAnalytical(
         filters: spec.filter,
         scope,
         explanation:
-          `At least one matching ${spec.target ?? "entity"} exists in ${scope}.`,
-        evidence: contributingEvidence
+          `At least one matching ${spec.target ?? "entity"} exists in ${scope}` +
+          objectClause +
+          ".",
+        evidence: contributingEvidence,
+        ...complementFields
       };
     }
 
@@ -566,8 +849,11 @@ export function executeAnalytical(
         filters: spec.filter,
         scope,
         explanation:
-          `No matching ${spec.target ?? "entity"} found among grounded evidence in ${scope} (not a universal claim).`,
-        evidence: []
+          `No matching ${spec.target ?? "entity"} found among grounded evidence in ${scope} (not a universal claim)` +
+          objectClause +
+          ".",
+        evidence: [],
+        ...complementFields
       };
     }
 
@@ -680,18 +966,66 @@ export function formatAnalyticalAnswer(
     const ids =
       result.deduplicatedEntityIds.join(", ") || "(none)";
 
-    return (
+    let answer =
       `Count of distinct ${result.subject ?? "entities"}` +
       ` in ${result.scope}: ${result.value}. ` +
-      `Matched canonical IDs: [${ids}].`
-    );
+      `Matched canonical IDs: [${ids}].`;
+
+    if (
+      result.filters?.objectPhrase ||
+      result.filters?.relationshipType
+    ) {
+      answer +=
+        ` Constraint: subject=${result.subject ?? "?"}` +
+        (result.filters?.relationshipType
+          ? ` -[${result.filters.relationshipType}]->`
+          : "") +
+        (result.filters?.objectPhrase
+          ? ` ${result.filters.objectPhrase}`
+          : "") +
+        ".";
+    }
+
+    if (
+      result.requestedOutputs?.includes("complement") ||
+      result.nonMatchingEntities
+    ) {
+      const universe =
+        (result.universeEntityIds ?? []).join(", ") || "(none)";
+
+      const nonMatching =
+        (result.nonMatchingEntities ?? [])
+          .map(item => item.entityId)
+          .join(", ") || "(none)";
+
+      answer +=
+        ` Universe: [${universe}].` +
+        ` Non-matching: [${nonMatching}].`;
+    }
+
+    return answer;
   }
 
   if (result.operation === "LIST") {
     if (result.matchedEntities.length === 0) {
-      return (
-        `No matching ${result.subject ?? "entities"} in ${result.scope}.`
-      );
+      let answer =
+        `No matching ${result.subject ?? "entities"} in ${result.scope}` +
+        (result.filters?.objectPhrase
+          ? ` for object=${result.filters.objectPhrase}`
+          : "") +
+        ".";
+
+      if (result.nonMatchingEntities) {
+        const nonMatching =
+          result.nonMatchingEntities
+            .map(item => item.entityId)
+            .join(", ") || "(none)";
+
+        answer +=
+          ` Non-matching universe members: [${nonMatching}].`;
+      }
+
+      return answer;
     }
 
     const lines =
@@ -699,13 +1033,28 @@ export function formatAnalyticalAnswer(
         `- ${item.label} (${item.entityId})` +
         (item.relationshipType
           ? ` via ${item.relationshipType}`
+          : "") +
+        (item.objectLabel
+          ? ` → ${item.objectLabel}`
           : "")
       );
 
-    return (
+    let answer =
       `Matching ${result.subject ?? "entities"} in ${result.scope}:\n` +
-      lines.join("\n")
-    );
+      lines.join("\n");
+
+    if (result.nonMatchingEntities) {
+      const nonLines =
+        result.nonMatchingEntities.map(item =>
+          `- ${item.label} (${item.entityId})`
+        );
+
+      answer +=
+        `\nNon-matching ${result.subject ?? "entities"}:\n` +
+        (nonLines.length > 0 ? nonLines.join("\n") : "- (none)");
+    }
+
+    return answer;
   }
 
   if (result.operation === "EXISTS") {

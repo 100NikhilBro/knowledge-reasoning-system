@@ -110,6 +110,87 @@ function detectAnalyticalAnswerContradiction(
   analytical: AnalyticalResult
 ): string | undefined {
 
+  if (analytical.requestedTargetEstablished === false) {
+    const claimsPositiveMatches =
+      /\bPEP[\s_-]?\d+\b/i.test(answer) ||
+      /\bcount of distinct[^.\n]*:\s*[1-9]/i.test(answer) ||
+      /\bmatched canonical ids:\s*\[[^\]]*\bpep\b/i.test(answer);
+
+    if (
+      claimsPositiveMatches &&
+      !answerBoundsUnsupported(answer) &&
+      !/could not be established|refusing to broaden|no matching/i.test(answer)
+    ) {
+      return (
+        "Answer claims analytical matches but the requested target was not established"
+      );
+    }
+  }
+
+  const objectPhrase =
+    analytical.filters?.objectPhrase;
+
+  if (
+    objectPhrase &&
+    analytical.filters?.requireObjectMatch
+  ) {
+    for (const item of analytical.matchedEntities) {
+      if (!item.objectLabel && !item.objectEntityId) {
+        continue;
+      }
+
+      const objectText =
+        `${item.objectLabel ?? ""} ${item.objectEntityId ?? ""}`;
+
+      const needle =
+        objectPhrase.toLowerCase().replace(/[^\w]+/g, "");
+
+      const hay =
+        objectText.toLowerCase().replace(/[^\w]+/g, "");
+
+      if (needle && hay && hay !== needle && !hay.endsWith(needle) && !needle.endsWith(hay)) {
+        return (
+          `Analytical matches include object "${item.objectLabel ?? item.objectEntityId}" ` +
+          `which is not the requested target "${objectPhrase}"`
+        );
+      }
+    }
+
+    /*
+     * Reject answers that attribute the wrong introduced feature when the
+     * requested object is explicit and unmatched/wrong.
+     */
+    if (
+      analytical.matchedEntities.length === 0 &&
+      /\b(?:typing|type hints?)\b/i.test(answer) &&
+      !/typing/i.test(objectPhrase) &&
+      !answerBoundsUnsupported(answer)
+    ) {
+      return (
+        `Answer discusses Typing but the analytical request targeted "${objectPhrase}"`
+      );
+    }
+  }
+
+  if (
+    analytical.requestedOutputs?.includes("complement") ||
+    Array.isArray(analytical.nonMatchingEntities)
+  ) {
+    const mentionsComplement =
+      /\bnon-matching\b|\buniverse\b|\bdo not\b|\bdon't\b|\bdoes not\b|\bnon matching\b/i
+        .test(answer);
+
+    if (
+      !mentionsComplement &&
+      analytical.status === "SUPPORTED" &&
+      !answerBoundsUnsupported(answer)
+    ) {
+      return (
+        "Answer omits the requested non-matching/complement analytical set"
+      );
+    }
+  }
+
   if (
     analytical.operation === "COUNT" ||
     analytical.operation === "DISTINCT_COUNT"
@@ -171,22 +252,22 @@ function detectAnalyticalAnswerContradiction(
       [...answer.matchAll(/\bPEP[\s_-]?(\d+)\b/gi)]
         .map(match => `PEP-${match[1]}`);
 
+    const allowedIds =
+      new Set([
+        ...analytical.deduplicatedEntityIds,
+        ...(analytical.nonMatchingEntities ?? []).map(item => item.entityId)
+      ]);
+
     for (const pep of inventedPep) {
       const grounded =
         analytical.matchedEntities.some(item =>
           item.entityId.toLowerCase().includes(pep.toLowerCase().replace("-", "")) ||
           item.entityId.toLowerCase().includes(pep.toLowerCase()) ||
-          item.label.toLowerCase().includes(pep.toLowerCase()) ||
-          String(item.entityId).toLowerCase().includes(
-            pep.toLowerCase().replace("pep-", "pep-")
-          )
+          item.label.toLowerCase().includes(pep.toLowerCase())
         );
 
-      /*
-       * Allow PEPs that appear in matched canonical ids.
-       */
       const groundedLoose =
-        analytical.deduplicatedEntityIds.some(id =>
+        [...allowedIds].some(id =>
           id.toLowerCase().replace(/[\s_-]/g, "")
             .includes(pep.toLowerCase().replace(/[\s_-]/g, ""))
         );
@@ -748,6 +829,49 @@ export function verifyAnswerAgainstIntent(
     const analytical =
       context.analyticalResult;
 
+    const objectPhrase =
+      analytical?.filters?.objectPhrase ??
+      understanding.analytical?.filter?.objectPhrase;
+
+    const relationshipType =
+      analytical?.filters?.relationshipType ??
+      understanding.analytical?.filter?.relationshipType;
+
+    if (relationshipType) {
+      claims.push({
+        predicate: relationshipType,
+        object: objectPhrase,
+        status:
+          analytical?.requestedTargetEstablished === false
+            ? "NOT_SUPPORTED"
+            : !analytical ||
+                analytical.status === "NOT_SUPPORTED" ||
+                analytical.status === "INSUFFICIENT_EVIDENCE"
+              ? "NOT_SUPPORTED"
+              : "SUPPORTED"
+      });
+    }
+
+    if (
+      analytical?.requestedOutputs?.includes("complement") ||
+      understanding.analytical?.includeComplement
+    ) {
+      const complementAnswered =
+        Array.isArray(analytical?.nonMatchingEntities) &&
+        /\bnon-matching\b|\buniverse\b|\bdo not\b|\bdon't\b/i.test(answer);
+
+      claims.push({
+        predicate: "COMPLEMENT",
+        status:
+          analytical?.status === "INSUFFICIENT_EVIDENCE" ||
+          analytical?.status === "NOT_SUPPORTED"
+            ? "NOT_SUPPORTED"
+            : complementAnswered
+              ? "SUPPORTED"
+              : "MISSING"
+      });
+    }
+
     claims.push({
       predicate: analytical?.operation ?? "ANALYTICAL",
       status:
@@ -785,18 +909,27 @@ export function verifyAnswerAgainstIntent(
         detectAnalyticalAnswerContradiction(answer, analytical);
 
       if (contradiction) {
-        status = "NOT_SUPPORTED";
+        const complementOnlyGap =
+          /omits the requested non-matching\/complement/i.test(contradiction);
+
+        status = complementOnlyGap
+          ? "PARTIALLY_SUPPORTED"
+          : "NOT_SUPPORTED";
         matchesIntent = false;
-        exceedsEvidence = true;
+        exceedsEvidence = !complementOnlyGap;
         reasons.push(contradiction);
         traceLines.push(
-          "Verification: generated answer contradicted analytical result"
+          complementOnlyGap
+            ? "Verification: analytical complement incomplete"
+            : "Verification: generated answer contradicted analytical result"
         );
       } else {
         status = "SUPPORTED";
         matchesIntent = true;
         traceLines.push(
-          `Verification: analytical ${analytical.operation}=${String(analytical.value)} consistent with answer`
+          `Verification: analytical ${analytical.operation}=${String(analytical.value)}` +
+          (objectPhrase ? ` object=${objectPhrase}` : "") +
+          " consistent with answer"
         );
       }
     }

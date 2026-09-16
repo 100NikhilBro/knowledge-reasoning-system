@@ -221,6 +221,7 @@ export type {
 export {
   executeAnalytical,
   dedupeEvidenceByEntityId,
+  exactObjectMatch,
   formatAnalyticalAnswer,
   formatAnalyticalTraceStep
 } from "./utils/execute-analytical.js";

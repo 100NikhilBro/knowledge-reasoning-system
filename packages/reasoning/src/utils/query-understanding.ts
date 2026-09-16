@@ -73,9 +73,20 @@ export interface AnalyticalFilter {
    */
   relationshipType?: string;
   /**
-   * Soft phrase for related endpoint matching (e.g. typing, readability).
+   * Soft phrase for related endpoint matching (legacy / non-exact paths).
    */
   relatedEntityPhrase?: string;
+  /**
+   * Exact relationship object/target phrase (e.g. Typing, DistributedComputing).
+   * When requireObjectMatch is true, only the relationship object endpoint
+   * may satisfy this constraint — subjects and unrelated entities must not.
+   */
+  objectPhrase?: string;
+  /**
+   * When true, objectPhrase is a hard constraint. If no grounded entity
+   * establishes that object, analytical execution fails closed.
+   */
+  requireObjectMatch?: boolean;
   /**
    * Entity type constraint for the analytical subject.
    */
@@ -101,6 +112,14 @@ export interface AnalyticalSpec {
    * Analytical population scope (always corpus-grounded for P6).
    */
   scope?: string;
+  /**
+   * Explicit outputs requested by compound analytical asks.
+   */
+  requestedOutputs?: Array<"count" | "list" | "complement">;
+  /**
+   * When true, compute non-matching subjects from an explicit universe.
+   */
+  includeComplement?: boolean;
 }
 
 export type SummarizationMode =
@@ -179,7 +198,7 @@ const OUT_OF_CORPUS_CUE =
   /\b(?:capital of|population of|weather in|stock price|who (?:is|was) the (?:president|king|queen)|distance (?:from|between)|recipe for)\b/i;
 
 const ANALYTICAL_CUE =
-  /\b(?:how many|count(?:\s+of)?|average|avg\b|mean number|most authors?|least authors?|total number|which peps?\b|list(?:\s+the)?\s+peps?\b|are there any|is there (?:a|any)|does any|minimum|maximum|lowest|highest|min(?:imum)?\s+pep|max(?:imum)?\s+pep)\b/i;
+  /\b(?:how many|count(?:\s+of)?|average|avg\b|mean number|most authors?|least authors?|total number|which peps?\b|list(?:\s+the)?\s+peps?\b|are there any|is there (?:a|any)|does any|minimum|maximum|lowest|highest|min(?:imum)?\s+pep|max(?:imum)?\s+pep|and which\b|do not|don't)\b/i;
 
 const SUMMARIZATION_CUE =
   /\b(?:summar(?:y|ize|ise)|overview of|evol(?:ve|ved|ving|ution)\b.*\b(?:across|over|through)\b|how did .+ evolv)/i;
@@ -297,6 +316,85 @@ export function extractQueryEntities(
 
 }
 
+function extractAnalyticalObjectPhrase(
+  query: string
+): string | undefined {
+
+  const called =
+    query.match(
+      /\b(?:feature|concern|protocol|entity)\s+(?:called|named)\s+([A-Za-z][\w.-]*)/i
+    );
+
+  if (called?.[1]) {
+    return called[1].trim();
+  }
+
+  const introduce =
+    query.match(
+      /\bintroduc(?:e|es|ed)\s+(?:a\s+|an\s+|the\s+)?(?:feature\s+)?(?:called\s+|named\s+)?(.+?)(?=\s*,\s*and\b|\s+and\s+which\b|\s+and\s+what\b|\s*\?|$)/i
+    );
+
+  if (introduce?.[1]) {
+    let object =
+      introduce[1]
+        .trim()
+        .replace(/[?"'.]+$/g, "")
+        .trim();
+
+    object =
+      object
+        .replace(/\s*-?\s*related\s+features?$/i, "")
+        .replace(/\s+features?$/i, "")
+        .trim();
+
+    if (!object || /^(?:a|an|the)$/i.test(object)) {
+      return undefined;
+    }
+
+    if (
+      /^typing\b/i.test(object) ||
+      /^type[\s_-]?hints?\b/i.test(object)
+    ) {
+      return "Typing";
+    }
+
+    if (/^readability\b/i.test(object)) {
+      return "Readability";
+    }
+
+    return object;
+  }
+
+  const address =
+    query.match(
+      /\baddress(?:es|ed|ing)?\s+(?:the\s+|a\s+|an\s+)?(.+?)(?=\s*,\s*and\b|\s+and\s+which\b|\s*\?|$)/i
+    );
+
+  if (address?.[1]) {
+    let object =
+      address[1]
+        .trim()
+        .replace(/[?"'.]+$/g, "")
+        .trim();
+
+    object =
+      object
+        .replace(/\s+concerns?$/i, "")
+        .trim();
+
+    if (/^readability\b/i.test(object)) {
+      return "Readability";
+    }
+
+    if (object) {
+      return object;
+    }
+  }
+
+  return undefined;
+
+}
+
 function detectAnalyticalSpec(
   query: string
 ): AnalyticalSpec | undefined {
@@ -311,21 +409,33 @@ function detectAnalyticalSpec(
   let operation: AnalyticalOperation =
     "UNKNOWN";
 
+  const wantsCount =
+    /\bhow many\b|\bcount\b|\btotal number\b/.test(normalized);
+
+  const wantsList =
+    /\bwhich peps?\b|\blist(?:\s+the)?\s+peps?\b|\benumerate\b|\band which\b/.test(
+      normalized
+    );
+
+  const wantsComplement =
+    /\b(?:which\s+peps?\s+)?(?:do not|don't|does not|did not)\b|\bnon[\s-]?matching\b|\bcomplement\b|\bwhich(?:\s+peps?)?\s+do\s+not\b/i
+      .test(query);
+
   if (
     /\bare there any\b|\bis there (?:a|any)\b|\bdoes any\b|\bdo any\b/.test(normalized)
   ) {
     operation = "EXISTS";
   } else if (
+    wantsCount &&
+    /\bdistinct\b/.test(normalized)
+  ) {
+    operation = "DISTINCT_COUNT";
+  } else if (wantsCount) {
+    operation = "COUNT";
+  } else if (
     /\bwhich peps?\b|\blist(?:\s+the)?\s+peps?\b|\benumerate\b/.test(normalized)
   ) {
     operation = "LIST";
-  } else if (
-    /\bhow many\b|\bcount\b|\btotal number\b/.test(normalized)
-  ) {
-    operation =
-      /\bdistinct\b/.test(normalized)
-        ? "DISTINCT_COUNT"
-        : "COUNT";
   } else if (/\baverage\b|\bavg\b|\bmean number\b/.test(normalized)) {
     /*
      * AVG is classified but not executable without a reliable numeric field.
@@ -366,9 +476,19 @@ function detectAnalyticalSpec(
     filter.relationshipType = "PROPOSED_BY";
   }
 
-  if (
+  const objectPhrase =
+    extractAnalyticalObjectPhrase(query);
+
+  if (objectPhrase) {
+    filter.objectPhrase = objectPhrase;
+    filter.requireObjectMatch = true;
+    filter.relatedEntityPhrase = objectPhrase;
+  } else if (
     /\btyping\b|\btype[\s_-]?hints?\b|\bannotations?\b/.test(normalized)
   ) {
+    /*
+     * Legacy soft cue when no explicit introduce-object was parsed.
+     */
     filter.relatedEntityPhrase = "typing";
   } else if (/\breadability\b/.test(normalized)) {
     filter.relatedEntityPhrase = "readability";
@@ -403,10 +523,32 @@ function detectAnalyticalSpec(
       ? "pep"
       : undefined;
 
+  const requestedOutputs: Array<"count" | "list" | "complement"> = [];
+
+  if (
+    operation === "COUNT" ||
+    operation === "DISTINCT_COUNT" ||
+    wantsCount
+  ) {
+    requestedOutputs.push("count");
+  }
+
+  if (
+    operation === "LIST" ||
+    wantsList
+  ) {
+    requestedOutputs.push("list");
+  }
+
+  if (wantsComplement) {
+    requestedOutputs.push("complement");
+  }
+
   const hasFilter =
     Boolean(
       filter.relationshipType ||
       filter.relatedEntityPhrase ||
+      filter.objectPhrase ||
       filter.entityType
     );
 
@@ -420,7 +562,13 @@ function detectAnalyticalSpec(
     ...(numericField
       ? { numericField }
       : {}),
-    scope: "current grounded corpus"
+    scope: "current grounded corpus",
+    ...(requestedOutputs.length > 0
+      ? { requestedOutputs }
+      : {}),
+    ...(wantsComplement
+      ? { includeComplement: true }
+      : {})
   };
 
 }
@@ -688,14 +836,21 @@ function buildRewrittenRepresentation(
       return [
         `operation=${understanding.analytical?.operation ?? "UNKNOWN"}`,
         understanding.analytical?.target
-          ? `target=${understanding.analytical.target}`
+          ? `subject=${understanding.analytical.target}`
           : undefined,
         understanding.analytical?.filter?.relationshipType
-          ? `filter.relationship=${understanding.analytical.filter.relationshipType}`
+          ? `relationship=${understanding.analytical.filter.relationshipType}`
           : undefined,
-        understanding.analytical?.filter?.relatedEntityPhrase
-          ? `filter.related=${understanding.analytical.filter.relatedEntityPhrase}`
-          : undefined,
+        understanding.analytical?.filter?.objectPhrase
+          ? `object=${understanding.analytical.filter.objectPhrase}`
+          : understanding.analytical?.filter?.relatedEntityPhrase
+            ? `filter.related=${understanding.analytical.filter.relatedEntityPhrase}`
+            : undefined,
+        understanding.analytical?.includeComplement
+          ? "outputs=count,list,complement"
+          : understanding.analytical?.requestedOutputs?.length
+            ? `outputs=${understanding.analytical.requestedOutputs.join(",")}`
+            : undefined,
         understanding.analytical?.numericField
           ? `field=${understanding.analytical.numericField}`
           : undefined,
