@@ -2018,10 +2018,17 @@ function detectAnswerScopeSpillover(
         ...scope.focusObjects,
         ...context.items.map(item => item.label),
         ...context.evidence.map(item => item.entity.label),
+        ...context.items.flatMap(item =>
+          propertyAliasPhrases(item.properties)
+        ),
+        ...context.evidence.flatMap(item =>
+          propertyAliasPhrases(item.entity.properties)
+        ),
         ...context.items.map(item => codedTopicFromItem(item)),
         ...context.evidence.map(item =>
           codedTopicFromEntity(item.entity)
-        )
+        ),
+        ...resolveFocusSubjectAliases(scope.focusSubjects, context)
       ]);
 
     for (const sentence of answer.split(/[.!?]+/)) {
@@ -2126,6 +2133,68 @@ function codedTopicFromEntity(
     entityId: entity.id,
     properties: entity.properties
   });
+
+}
+
+function propertyAliasPhrases(
+  properties: Record<string, unknown> | undefined
+): string[] {
+
+  if (!properties) {
+    return [];
+  }
+
+  return Object.values(properties)
+    .filter(
+      value =>
+        typeof value === "string" ||
+        typeof value === "number"
+    )
+    .map(String)
+    .map(value => value.trim())
+    .filter(value => value.length >= 2);
+
+}
+
+/**
+ * Labels/aliases of evidence entities that match requested focus subjects.
+ * Lets compound answers verbalize "Type Hints" for focus "PEP-484".
+ */
+function resolveFocusSubjectAliases(
+  focusSubjects: string[],
+  context: ReasoningContext
+): string[] {
+
+  if (focusSubjects.length === 0) {
+    return [];
+  }
+
+  const aliases: string[] = [];
+
+  const entities = [
+    ...context.evidence.map(item => item.entity),
+    ...context.items.map(item => ({
+      id: item.entityId,
+      label: item.label,
+      source: item.source,
+      properties: item.properties
+    }))
+  ];
+
+  for (const subject of focusSubjects) {
+    for (const entity of entities) {
+      if (!entityMatchesPhrase(entity, subject)) {
+        continue;
+      }
+
+      aliases.push(entity.label);
+      aliases.push(
+        ...propertyAliasPhrases(entity.properties)
+      );
+    }
+  }
+
+  return aliases;
 
 }
 

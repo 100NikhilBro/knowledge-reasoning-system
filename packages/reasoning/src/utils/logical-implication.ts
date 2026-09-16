@@ -851,16 +851,93 @@ function listEndpoints(
   properties?: Record<string, unknown>;
 }> {
 
-  if (context.evidence.length > 0) {
-    return context.evidence.map(entry => entry.entity);
+  const byId =
+    new Map<string, {
+      id: string;
+      label: string;
+      source: string;
+      properties?: Record<string, unknown>;
+    }>();
+
+  function upsert(
+    entity: {
+      id: string;
+      label: string;
+      source: string;
+      properties?: Record<string, unknown>;
+    }
+  ): void {
+
+    const existing =
+      byId.get(entity.id);
+
+    if (!existing) {
+      byId.set(entity.id, entity);
+      return;
+    }
+
+    byId.set(entity.id, {
+      id: entity.id,
+      label:
+        existing.label.includes(":") && !entity.label.includes(":")
+          ? entity.label
+          : existing.label || entity.label,
+      source: existing.source || entity.source,
+      properties: {
+        ...(existing.properties ?? {}),
+        ...(entity.properties ?? {})
+      }
+    });
+
   }
 
-  return context.items.map(entry => ({
-    id: entry.entityId,
-    label: entry.label,
-    source: entry.source,
-    properties: entry.properties
-  }));
+  for (const entry of context.evidence) {
+    upsert(entry.entity);
+  }
+
+  for (const entry of context.items) {
+    upsert({
+      id: entry.entityId,
+      label: entry.label,
+      source: entry.source,
+      properties: entry.properties
+    });
+  }
+
+  for (const relationship of listRelationships(context)) {
+    if (!byId.has(relationship.from)) {
+      const tail =
+        relationship.from.includes(":")
+          ? relationship.from.slice(relationship.from.indexOf(":") + 1)
+          : relationship.from;
+
+      const pep =
+        tail.match(/^PEP[\s_-]?(\d+)$/i)?.[1];
+
+      upsert({
+        id: relationship.from,
+        label: tail,
+        source: "",
+        properties: pep ? { pep } : {}
+      });
+    }
+
+    if (!byId.has(relationship.to)) {
+      const tail =
+        relationship.to.includes(":")
+          ? relationship.to.slice(relationship.to.indexOf(":") + 1)
+          : relationship.to;
+
+      upsert({
+        id: relationship.to,
+        label: tail,
+        source: "",
+        properties: {}
+      });
+    }
+  }
+
+  return [...byId.values()];
 
 }
 
