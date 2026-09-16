@@ -21,6 +21,11 @@ import {
   ALLOWED_RELATIONSHIP_TYPES
 } from "@knowledge/shared";
 
+import {
+  detectComparisonRequest,
+  type ComparisonRequest
+} from "./detect-comparison-request.js";
+
 /**
  * Canonical query intents for KRS routing.
  * Not every intent maps to a new strategy — some reserve P6/P7 work.
@@ -193,6 +198,10 @@ export interface QueryUnderstanding {
     object: string;
     direction: "outgoing" | "incoming" | "undirected";
   };
+  /**
+   * Query-driven comparison request (subjects + dimensions).
+   */
+  comparison?: ComparisonRequest;
   /**
    * Traversal depth hint for multi-hop.
    */
@@ -887,7 +896,9 @@ function buildRewrittenRepresentation(
         .join("; ");
 
     case "COMPARISON":
-      return `compare entities: ${understanding.entities.join(", ") || understanding.normalizedQuery}`;
+      return understanding.comparison
+        ? `compare subjects=[${understanding.comparison.subjects.join(", ")}]; dimensions=[${understanding.comparison.dimensions.join(", ")}]`
+        : `compare entities: ${understanding.entities.join(", ") || understanding.normalizedQuery}`;
 
     case "OUT_OF_CORPUS":
       return "out-of-corpus request; fail closed if no grounded evidence";
@@ -1212,6 +1223,26 @@ export function understandQuery(
       claims
     );
 
+  const comparison =
+    intent === "COMPARISON"
+      ? detectComparisonRequest(normalizedQuery, entities)
+      : undefined;
+
+  const comparisonSubjects =
+    comparison?.subjects ?? [];
+
+  const mergedEntities =
+    comparisonSubjects.length >= 2
+      ? uniqueStrings([
+          ...comparisonSubjects,
+          ...entities.filter(entity =>
+            !comparisonSubjects.some(subject =>
+              subject.toLowerCase() === entity.toLowerCase()
+            )
+          )
+        ])
+      : entities;
+
   const claimFocuses =
     claims
       .map(claim => claim.predicate)
@@ -1263,11 +1294,11 @@ export function understandQuery(
     intent,
     originalQuery,
     normalizedQuery,
-    entities,
+    entities: mergedEntities,
     ...(between?.bridge
       ? { bridgeEntity: between.bridge }
-      : intent === "BRIDGE_RELATIONSHIP" && entities.length >= 3
-        ? { bridgeEntity: entities[2] }
+      : intent === "BRIDGE_RELATIONSHIP" && mergedEntities.length >= 3
+        ? { bridgeEntity: mergedEntities[2] }
         : {}),
     relationshipRequested:
       mergedFocuses.length > 0
@@ -1288,6 +1319,7 @@ export function understandQuery(
     subRequests,
     ...(analytical ? { analytical } : {}),
     ...(summarization ? { summarization } : {}),
+    ...(comparison ? { comparison } : {}),
     ...(routing.focusRelationships
       ? { focusRelationships: routing.focusRelationships }
       : {}),

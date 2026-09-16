@@ -18,6 +18,18 @@ import {
 } from "./classify-relational-support.js";
 
 import {
+  detectComparisonRequest
+} from "./detect-comparison-request.js";
+
+import {
+  buildStructuredComparison
+} from "./compare-evidence.js";
+
+import {
+  renderStructuredComparison
+} from "./render-comparison.js";
+
+import {
   detectRelationshipBetweenQuery
 } from "./detect-relationship-between-query.js";
 
@@ -1430,6 +1442,158 @@ export function verifyAnswerAgainstIntent(
         matchesIntent = true;
         traceLines.push(
           `Verification: summarization mode=${summarization.mode} documents=${summarization.documentCount}`
+        );
+      }
+    }
+
+  }
+
+  /*
+   * Query-driven comparison: subjects, dimensions, and per-subject facts.
+   */
+  if (understanding.intent === "COMPARISON") {
+
+    const request =
+      understanding.comparison ??
+      detectComparisonRequest(
+        context.query ?? "",
+        understanding.entities
+      );
+
+    if (!request || request.subjects.length < 2) {
+      status = "NOT_SUPPORTED";
+      claims.push({
+        predicate: "COMPARISON",
+        status: "NOT_SUPPORTED"
+      });
+      matchesIntent = false;
+      reasons.push(
+        "Comparison subjects could not be resolved from the query"
+      );
+      traceLines.push(
+        "Verification: comparison subjects unresolved"
+      );
+    } else {
+      const structured =
+        buildStructuredComparison(
+          request,
+          context.evidence
+        );
+
+      for (const subject of request.subjects) {
+        const row =
+          structured.perSubject.find(item =>
+            item.subject === subject
+          );
+
+        claims.push({
+          subject,
+          predicate: "COMPARISON_SUBJECT",
+          status:
+            row?.supported
+              ? "SUPPORTED"
+              : "NOT_SUPPORTED"
+        });
+      }
+
+      for (const dimension of request.dimensions) {
+        const unsupported =
+          structured.unsupportedDimensions.includes(dimension) &&
+          structured.perSubject.every(item =>
+            item.unsupportedDimensions.includes(dimension) ||
+            !item.supported
+          );
+
+        claims.push({
+          predicate: dimension.toUpperCase(),
+          status:
+            unsupported
+              ? "NOT_SUPPORTED"
+              : "SUPPORTED"
+        });
+      }
+
+      const expected =
+        context.comparison ??
+        renderStructuredComparison(structured);
+
+      const unrequestedSubjectLeak =
+        structured.perSubject.some(item =>
+          !request.subjects.some(subject =>
+            subject.toLowerCase() === item.subject.toLowerCase()
+          )
+        );
+
+      if (unrequestedSubjectLeak) {
+        status = "NOT_SUPPORTED";
+        matchesIntent = false;
+        exceedsEvidence = true;
+        reasons.push(
+          "Comparison includes an unrequested subject"
+        );
+        traceLines.push(
+          "Verification: unrequested comparison subject"
+        );
+      } else if (
+        structured.unsupportedSubjects.length ===
+        request.subjects.length
+      ) {
+        status = "NOT_SUPPORTED";
+        claims.push({
+          predicate: "COMPARISON",
+          status: "NOT_SUPPORTED"
+        });
+      } else if (structured.unsupportedSubjects.length > 0) {
+        status = "PARTIALLY_SUPPORTED";
+        reasons.push(
+          `Insufficient evidence for: ${structured.unsupportedSubjects.join(", ")}`
+        );
+        traceLines.push(
+          "Verification: comparison partially supported"
+        );
+      } else {
+        status = "SUPPORTED";
+      }
+
+      if (
+        answer.trim().length > 0 &&
+        context.comparison !== undefined &&
+        answer !== expected &&
+        !answerBoundsUnsupported(answer)
+      ) {
+        /*
+         * Generator may paraphrase; require every supported subject mention
+         * and forbid inventing unsupported subjects.
+         */
+        const missingSubject =
+          structured.perSubject
+            .filter(item => item.supported)
+            .some(item => {
+              const needle =
+                (item.label ?? item.subject).toLowerCase();
+
+              return !answer.toLowerCase().includes(needle) &&
+                !answer.toLowerCase().includes(item.subject.toLowerCase());
+            });
+
+        if (missingSubject) {
+          matchesIntent = false;
+          status = "PARTIALLY_SUPPORTED";
+          reasons.push(
+            "Comparison answer omits a requested subject"
+          );
+          traceLines.push(
+            "Verification: comparison answer incomplete"
+          );
+        }
+      }
+
+      if (
+        matchesIntent &&
+        status === "SUPPORTED"
+      ) {
+        traceLines.push(
+          "Verification: comparison subjects and dimensions consistent"
         );
       }
     }

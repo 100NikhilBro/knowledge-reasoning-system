@@ -74,6 +74,23 @@ export interface ReasoningPlan {
   };
 
   /**
+   * Query-driven comparison subjects and dimensions (never retrieval order).
+   */
+  comparison?: {
+    subjects: string[];
+    dimensions: Array<
+      | "relationships"
+      | "introduces"
+      | "proposed_by"
+      | "addresses"
+      | "results_in"
+      | "implemented_in"
+      | "properties"
+    >;
+    relationshipsOnly: boolean;
+  };
+
+  /**
    * Canonical query intent from P2 understanding (routing metadata).
    */
   intent?: string;

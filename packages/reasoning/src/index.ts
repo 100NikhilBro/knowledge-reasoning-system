@@ -152,6 +152,35 @@ export type {
 } from "./utils/query-understanding.js";
 
 export {
+  detectComparisonRequest,
+  extractComparisonSubjects,
+  detectComparisonDimensions,
+  relationshipTypesForDimensions
+} from "./utils/detect-comparison-request.js";
+
+export type {
+  ComparisonRequest,
+  ComparisonDimension
+} from "./utils/detect-comparison-request.js";
+
+export {
+  compareEvidence,
+  buildStructuredComparison
+} from "./utils/compare-evidence.js";
+
+export type {
+  ComparisonResult,
+  StructuredComparisonResult,
+  ComparisonSubjectEvidence,
+  SubjectRelationshipFact
+} from "./utils/compare-evidence.js";
+
+export {
+  renderComparison,
+  renderStructuredComparison
+} from "./utils/render-comparison.js";
+
+export {
   verifyAnswerAgainstIntent,
   formatVerificationTraceStep
 } from "./utils/answer-intent-verification.js";

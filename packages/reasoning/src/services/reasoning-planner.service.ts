@@ -63,6 +63,11 @@ implements ReasoningPlanner {
         understanding.requireTypedEdge;
     }
 
+    if (understanding.comparison) {
+      plan.comparison =
+        understanding.comparison;
+    }
+
     return plan;
 
   }
