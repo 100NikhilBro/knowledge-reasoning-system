@@ -1,0 +1,1417 @@
+[
+  {
+    "id": "A",
+    "query": "What did PEP-484 introduce?",
+    "runs": 10,
+    "stageStability": {
+      "understanding": {
+        "uniqueCount": 1,
+        "values": [
+          "5572a9120dd77823"
+        ],
+        "stable": true
+      },
+      "scope": {
+        "uniqueCount": 1,
+        "values": [
+          "f9cccaf35f75a73c"
+        ],
+        "stable": true
+      },
+      "answerEvidenceSorted": {
+        "uniqueCount": 1,
+        "values": [
+          "81eae1878e804600"
+        ],
+        "stable": true
+      },
+      "answerEvidenceOrder": {
+        "uniqueCount": 1,
+        "values": [
+          "588e6c3c177fd877"
+        ],
+        "stable": true
+      },
+      "path": {
+        "uniqueCount": 1,
+        "values": [
+          "14b814a3b83f9d62"
+        ],
+        "stable": true
+      },
+      "structuredContext": {
+        "uniqueCount": 1,
+        "values": [
+          "520f9d212669124f"
+        ],
+        "stable": true
+      },
+      "templateAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "d14ec9f6eca65642"
+        ],
+        "stable": true
+      },
+      "attributionByAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "86529a0968450dc5"
+        ],
+        "stable": true
+      },
+      "verificationByAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "f969b670db63eba4"
+        ],
+        "stable": true
+      }
+    },
+    "firstDivergentStage": null,
+    "divergenceClass": "deterministic_upstream_verification_depends_on_answer_form",
+    "templateAnswerStable": true,
+    "templateAnswer": "Type Hints introduced Typing.",
+    "understanding": {
+      "intent": "RELATIONSHIP",
+      "entities": [
+        "PEP-484"
+      ],
+      "relationshipRequested": [
+        "INTRODUCES"
+      ],
+      "claims": [
+        {
+          "subject": "PEP-484",
+          "predicate": "INTRODUCES",
+          "object": "",
+          "inferenceMode": "typed_edge"
+        }
+      ],
+      "strategy": "single-hop",
+      "maxDepth": 1
+    },
+    "path": {
+      "kind": "DIRECT",
+      "hopCount": 1,
+      "supportsClaim": true,
+      "relationships": [
+        "INTRODUCES"
+      ],
+      "explanation": "Attested relationship INTRODUCES present in evidence."
+    },
+    "answerEvidenceOrder": [
+      "rel:proposal:PEP-484|INTRODUCES|feature:typing@proposal:PEP-484",
+      "ent:proposal:PEP-484",
+      "rel:proposal:PEP-484|INTRODUCES|feature:typing@feature:typing",
+      "ent:feature:typing"
+    ],
+    "structuredContext": {
+      "requestedPredicates": [
+        "INTRODUCES"
+      ],
+      "evidenceKeys": [
+        "rel:proposal:PEP-484|INTRODUCES|feature:typing@proposal:PEP-484",
+        "ent:proposal:PEP-484",
+        "rel:proposal:PEP-484|INTRODUCES|feature:typing@feature:typing",
+        "ent:feature:typing"
+      ]
+    },
+    "answerFormComparison": [
+      {
+        "answer": "Type Hints introduced Typing.",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      },
+      {
+        "answer": "Typing",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      },
+      {
+        "answer": "PEP-484 introduced Typing.",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      },
+      {
+        "answer": "Type Hints introduced Typing",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      }
+    ],
+    "probeDivergence": {
+      "Type Hints introduced Typing.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "Typing": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "PEP-484 introduced Typing.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "Type Hints introduced Typing": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      }
+    }
+  },
+  {
+    "id": "B",
+    "query": "How is PEP-484 connected to Typing?",
+    "runs": 10,
+    "stageStability": {
+      "understanding": {
+        "uniqueCount": 1,
+        "values": [
+          "6b86366672a51c23"
+        ],
+        "stable": true
+      },
+      "scope": {
+        "uniqueCount": 1,
+        "values": [
+          "3d0de08f9237829d"
+        ],
+        "stable": true
+      },
+      "answerEvidenceSorted": {
+        "uniqueCount": 1,
+        "values": [
+          "81eae1878e804600"
+        ],
+        "stable": true
+      },
+      "answerEvidenceOrder": {
+        "uniqueCount": 1,
+        "values": [
+          "44c2345357d457c8"
+        ],
+        "stable": true
+      },
+      "path": {
+        "uniqueCount": 1,
+        "values": [
+          "bb7f1b939cb8cea1"
+        ],
+        "stable": true
+      },
+      "structuredContext": {
+        "uniqueCount": 1,
+        "values": [
+          "36db3e9b70729c2d"
+        ],
+        "stable": true
+      },
+      "templateAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "d14ec9f6eca65642"
+        ],
+        "stable": true
+      },
+      "attributionByAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "d2131ca72ccebcfc"
+        ],
+        "stable": true
+      },
+      "verificationByAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "5f9e9aa74e982afd"
+        ],
+        "stable": true
+      }
+    },
+    "firstDivergentStage": null,
+    "divergenceClass": "deterministic_upstream_verification_depends_on_answer_form",
+    "templateAnswerStable": true,
+    "templateAnswer": "Type Hints introduced Typing.",
+    "understanding": {
+      "intent": "CONNECTED_RELATIONSHIP",
+      "entities": [
+        "PEP-484",
+        "Typing"
+      ],
+      "relationshipRequested": [],
+      "relationshipMode": "connected",
+      "claims": [],
+      "requireRelationshipBetween": {
+        "left": "PEP-484",
+        "right": "Typing"
+      },
+      "strategy": "multi-hop",
+      "maxDepth": 2
+    },
+    "path": {
+      "kind": "DIRECT",
+      "hopCount": 1,
+      "supportsClaim": true,
+      "relationships": [
+        "INTRODUCES"
+      ],
+      "explanation": "Direct relationship establishes PEP-484 ↔ Typing."
+    },
+    "answerEvidenceOrder": [
+      "rel:proposal:PEP-484|INTRODUCES|feature:typing@proposal:PEP-484",
+      "ent:proposal:PEP-484",
+      "ent:feature:typing",
+      "rel:proposal:PEP-484|INTRODUCES|feature:typing@feature:typing"
+    ],
+    "structuredContext": {
+      "requestedPredicates": [],
+      "evidenceKeys": [
+        "rel:proposal:PEP-484|INTRODUCES|feature:typing@proposal:PEP-484",
+        "ent:proposal:PEP-484",
+        "ent:feature:typing",
+        "rel:proposal:PEP-484|INTRODUCES|feature:typing@feature:typing"
+      ]
+    },
+    "answerFormComparison": [
+      {
+        "answer": "Type Hints introduced Typing.",
+        "attribution": true,
+        "status": "PARTIALLY_SUPPORTED",
+        "confidence": 0.65,
+        "reasons": [
+          "Answer does not cover the requested connected/bridge relationship",
+          "Confidence: MEDIUM (score=0.65) — direct graph relationship found; valid graph relationships found; query intent matched evidence (CONNECTED_RELATIONSHIP); some claims remain unsupported; verification restricted the answer",
+          "Verification: answer incomplete for requested relationship",
+          "Verification: PARTIALLY_SUPPORTED — answer does not fully address requested intent"
+        ]
+      },
+      {
+        "answer": "PEP-484 introduces the Typing feature.",
+        "attribution": false,
+        "status": "NOT_SUPPORTED",
+        "confidence": 0,
+        "reasons": [
+          "Confidence: NONE (score=0) — verification rejected the claim",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: relationship attribution mismatch",
+          "Verification: NOT_SUPPORTED — generated claim exceeded evidence",
+          "Verification: NOT_SUPPORTED — relationship attribution mismatch"
+        ]
+      },
+      {
+        "answer": "Typing is connected to Type Hints.",
+        "attribution": true,
+        "status": "PARTIALLY_SUPPORTED",
+        "confidence": 0.65,
+        "reasons": [
+          "Answer does not cover the requested connected/bridge relationship",
+          "Confidence: MEDIUM (score=0.65) — direct graph relationship found; valid graph relationships found; query intent matched evidence (CONNECTED_RELATIONSHIP); some claims remain unsupported; verification restricted the answer",
+          "Verification: answer incomplete for requested relationship",
+          "Verification: PARTIALLY_SUPPORTED — answer does not fully address requested intent"
+        ]
+      },
+      {
+        "answer": "PEP-484 -> INTRODUCES -> Typing",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (CONNECTED_RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      }
+    ],
+    "probeDivergence": {
+      "Type Hints introduced Typing.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "PARTIALLY_SUPPORTED"
+        ],
+        "sample": {
+          "status": "PARTIALLY_SUPPORTED",
+          "confidence": 0.65,
+          "reasons": [
+            "Answer does not cover the requested connected/bridge relationship",
+            "Confidence: MEDIUM (score=0.65) — direct graph relationship found; valid graph relationships found; query intent matched evidence (CONNECTED_RELATIONSHIP); some claims remain unsupported; verification restricted the answer",
+            "Verification: answer incomplete for requested relationship",
+            "Verification: PARTIALLY_SUPPORTED — answer does not fully address requested intent"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "PEP-484 introduces the Typing feature.": {
+        "attributionValues": [
+          "false"
+        ],
+        "verificationStatuses": [
+          "NOT_SUPPORTED"
+        ],
+        "sample": {
+          "status": "NOT_SUPPORTED",
+          "confidence": 0,
+          "reasons": [
+            "Confidence: NONE (score=0) — verification rejected the claim",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: relationship attribution mismatch",
+            "Verification: NOT_SUPPORTED — generated claim exceeded evidence",
+            "Verification: NOT_SUPPORTED — relationship attribution mismatch"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "Typing is connected to Type Hints.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "PARTIALLY_SUPPORTED"
+        ],
+        "sample": {
+          "status": "PARTIALLY_SUPPORTED",
+          "confidence": 0.65,
+          "reasons": [
+            "Answer does not cover the requested connected/bridge relationship",
+            "Confidence: MEDIUM (score=0.65) — direct graph relationship found; valid graph relationships found; query intent matched evidence (CONNECTED_RELATIONSHIP); some claims remain unsupported; verification restricted the answer",
+            "Verification: answer incomplete for requested relationship",
+            "Verification: PARTIALLY_SUPPORTED — answer does not fully address requested intent"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "PEP-484 -> INTRODUCES -> Typing": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (CONNECTED_RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      }
+    }
+  },
+  {
+    "id": "C",
+    "query": "What is the direct relationship between PEP-526 and Typing?",
+    "runs": 10,
+    "stageStability": {
+      "understanding": {
+        "uniqueCount": 1,
+        "values": [
+          "9de69eb95d5c4239"
+        ],
+        "stable": true
+      },
+      "scope": {
+        "uniqueCount": 1,
+        "values": [
+          "dfd3aa7d7d04ae4d"
+        ],
+        "stable": true
+      },
+      "answerEvidenceSorted": {
+        "uniqueCount": 1,
+        "values": [
+          "238b99831bcff40f"
+        ],
+        "stable": true
+      },
+      "answerEvidenceOrder": {
+        "uniqueCount": 1,
+        "values": [
+          "4653c649b36385a2"
+        ],
+        "stable": true
+      },
+      "path": {
+        "uniqueCount": 1,
+        "values": [
+          "bfd24d5b3794f0b0"
+        ],
+        "stable": true
+      },
+      "structuredContext": {
+        "uniqueCount": 1,
+        "values": [
+          "b49ed29eda4dfef7"
+        ],
+        "stable": true
+      },
+      "templateAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "12a2feabb2168349"
+        ],
+        "stable": true
+      },
+      "attributionByAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "3d70090acef250e3"
+        ],
+        "stable": true
+      },
+      "verificationByAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "c862fbea9507fe0e"
+        ],
+        "stable": true
+      }
+    },
+    "firstDivergentStage": null,
+    "divergenceClass": "deterministic_upstream_verification_depends_on_answer_form",
+    "templateAnswerStable": true,
+    "templateAnswer": "PEP-526 (Variable Annotations) is a proposal.",
+    "understanding": {
+      "intent": "DIRECT_RELATIONSHIP",
+      "entities": [
+        "PEP-526",
+        "Typing"
+      ],
+      "relationshipRequested": [],
+      "relationshipMode": "direct",
+      "claims": [],
+      "requireRelationshipBetween": {
+        "left": "PEP-526",
+        "right": "Typing"
+      },
+      "strategy": "single-hop",
+      "maxDepth": 1
+    },
+    "path": {
+      "kind": "DIRECT",
+      "hopCount": 1,
+      "supportsClaim": true,
+      "relationships": [
+        "INTRODUCES"
+      ],
+      "explanation": "Direct relationship establishes PEP-526 ↔ Typing."
+    },
+    "answerEvidenceOrder": [
+      "rel:proposal:PEP-526|INTRODUCES|feature:typing@proposal:PEP-526",
+      "ent:proposal:PEP-526",
+      "ent:feature:typing",
+      "rel:proposal:PEP-526|INTRODUCES|feature:typing@feature:typing"
+    ],
+    "structuredContext": {
+      "requestedPredicates": [],
+      "evidenceKeys": [
+        "rel:proposal:PEP-526|INTRODUCES|feature:typing@proposal:PEP-526",
+        "ent:proposal:PEP-526",
+        "ent:feature:typing",
+        "rel:proposal:PEP-526|INTRODUCES|feature:typing@feature:typing"
+      ]
+    },
+    "answerFormComparison": [
+      {
+        "answer": "Variable Annotations introduced Typing.",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (DIRECT_RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      },
+      {
+        "answer": "PEP-526 introduced Typing.",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (DIRECT_RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      },
+      {
+        "answer": "Typing",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (DIRECT_RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      }
+    ],
+    "probeDivergence": {
+      "Variable Annotations introduced Typing.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (DIRECT_RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "PEP-526 introduced Typing.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (DIRECT_RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "Typing": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (DIRECT_RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      }
+    }
+  },
+  {
+    "id": "D",
+    "query": "How are PEP-526 and PEP-604 connected through Typing?",
+    "runs": 10,
+    "stageStability": {
+      "understanding": {
+        "uniqueCount": 1,
+        "values": [
+          "8afc23f84d99fc50"
+        ],
+        "stable": true
+      },
+      "scope": {
+        "uniqueCount": 1,
+        "values": [
+          "9ba69230e340a4ca"
+        ],
+        "stable": true
+      },
+      "answerEvidenceSorted": {
+        "uniqueCount": 1,
+        "values": [
+          "91a6f285593bb95c"
+        ],
+        "stable": true
+      },
+      "answerEvidenceOrder": {
+        "uniqueCount": 1,
+        "values": [
+          "e3ab3a04d712248d"
+        ],
+        "stable": true
+      },
+      "path": {
+        "uniqueCount": 1,
+        "values": [
+          "739ad3edf99b4a25"
+        ],
+        "stable": true
+      },
+      "structuredContext": {
+        "uniqueCount": 1,
+        "values": [
+          "2fd261aa16d2a7a3"
+        ],
+        "stable": true
+      },
+      "templateAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "66b1ab3c8184584b"
+        ],
+        "stable": true
+      },
+      "attributionByAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "89c97e351f4d07d7"
+        ],
+        "stable": true
+      },
+      "verificationByAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "dae66027f59a59ed"
+        ],
+        "stable": true
+      }
+    },
+    "firstDivergentStage": null,
+    "divergenceClass": "deterministic_upstream_verification_depends_on_answer_form",
+    "templateAnswerStable": true,
+    "templateAnswer": "Variable Annotations introduced Typing. Union Syntax introduced Typing.",
+    "understanding": {
+      "intent": "BRIDGE_RELATIONSHIP",
+      "entities": [
+        "PEP-526",
+        "PEP-604",
+        "Typing"
+      ],
+      "relationshipRequested": [],
+      "relationshipMode": "bridge",
+      "claims": [],
+      "requireRelationshipBetween": {
+        "left": "PEP-526",
+        "right": "PEP-604"
+      },
+      "bridgeEntity": "Typing",
+      "strategy": "multi-hop",
+      "maxDepth": 2
+    },
+    "path": {
+      "kind": "BRIDGE",
+      "hopCount": 2,
+      "supportsClaim": true,
+      "relationships": [
+        "INTRODUCES",
+        "INTRODUCES"
+      ],
+      "explanation": "Bridge path connects PEP-526 and PEP-604 through Typing."
+    },
+    "answerEvidenceOrder": [
+      "rel:proposal:PEP-526|INTRODUCES|feature:typing@proposal:PEP-526",
+      "rel:proposal:PEP-604|INTRODUCES|feature:typing@proposal:PEP-604",
+      "ent:proposal:PEP-526",
+      "ent:proposal:PEP-604",
+      "ent:feature:typing",
+      "rel:proposal:PEP-526|INTRODUCES|feature:typing@feature:typing",
+      "rel:proposal:PEP-604|INTRODUCES|feature:typing@feature:typing"
+    ],
+    "structuredContext": {
+      "requestedPredicates": [],
+      "evidenceKeys": [
+        "rel:proposal:PEP-526|INTRODUCES|feature:typing@proposal:PEP-526",
+        "rel:proposal:PEP-604|INTRODUCES|feature:typing@proposal:PEP-604",
+        "ent:proposal:PEP-526",
+        "ent:proposal:PEP-604",
+        "ent:feature:typing",
+        "rel:proposal:PEP-526|INTRODUCES|feature:typing@feature:typing",
+        "rel:proposal:PEP-604|INTRODUCES|feature:typing@feature:typing"
+      ]
+    },
+    "answerFormComparison": [
+      {
+        "answer": "Variable Annotations introduced Typing. Union Syntax introduced Typing.",
+        "attribution": true,
+        "status": "PARTIALLY_SUPPORTED",
+        "confidence": 0.65,
+        "reasons": [
+          "Answer does not cover the requested connected/bridge relationship",
+          "Confidence: MEDIUM (score=0.65) — requested bridge entity found; path matches bridge relationship intent; valid graph relationships found; query intent matched evidence (BRIDGE_RELATIONSHIP); some claims remain unsupported; verification restricted the answer",
+          "Verification: answer incomplete for requested relationship",
+          "Verification: PARTIALLY_SUPPORTED — answer does not fully address requested intent"
+        ]
+      },
+      {
+        "answer": "PEP-526 introduced Typing. PEP-604 introduced Typing.",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — requested bridge entity found; path matches bridge relationship intent; valid graph relationships found; query intent matched evidence (BRIDGE_RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      },
+      {
+        "answer": "Both introduced Typing.",
+        "attribution": false,
+        "status": "PARTIALLY_SUPPORTED",
+        "confidence": 0.65,
+        "reasons": [
+          "Answer does not cover the requested connected/bridge relationship",
+          "Answer exceeds query scope: foreign subject Both",
+          "Confidence: MEDIUM (score=0.65) — requested bridge entity found; path matches bridge relationship intent; valid graph relationships found; query intent matched evidence (BRIDGE_RELATIONSHIP); some claims remain unsupported; verification restricted the answer",
+          "Verification: answer incomplete for requested relationship",
+          "Verification: answer exceeded query-focused evidence scope",
+          "Verification: PARTIALLY_SUPPORTED — generated claim exceeded evidence"
+        ]
+      },
+      {
+        "answer": "Typing connects PEP-526 and PEP-604.",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — requested bridge entity found; path matches bridge relationship intent; valid graph relationships found; query intent matched evidence (BRIDGE_RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: answer claims not grounded"
+        ]
+      }
+    ],
+    "probeDivergence": {
+      "Variable Annotations introduced Typing. Union Syntax introduced Typing.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "PARTIALLY_SUPPORTED"
+        ],
+        "sample": {
+          "status": "PARTIALLY_SUPPORTED",
+          "confidence": 0.65,
+          "reasons": [
+            "Answer does not cover the requested connected/bridge relationship",
+            "Confidence: MEDIUM (score=0.65) — requested bridge entity found; path matches bridge relationship intent; valid graph relationships found; query intent matched evidence (BRIDGE_RELATIONSHIP); some claims remain unsupported; verification restricted the answer",
+            "Verification: answer incomplete for requested relationship",
+            "Verification: PARTIALLY_SUPPORTED — answer does not fully address requested intent"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "PEP-526 introduced Typing. PEP-604 introduced Typing.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — requested bridge entity found; path matches bridge relationship intent; valid graph relationships found; query intent matched evidence (BRIDGE_RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "Both introduced Typing.": {
+        "attributionValues": [
+          "false"
+        ],
+        "verificationStatuses": [
+          "PARTIALLY_SUPPORTED"
+        ],
+        "sample": {
+          "status": "PARTIALLY_SUPPORTED",
+          "confidence": 0.65,
+          "reasons": [
+            "Answer does not cover the requested connected/bridge relationship",
+            "Answer exceeds query scope: foreign subject Both",
+            "Confidence: MEDIUM (score=0.65) — requested bridge entity found; path matches bridge relationship intent; valid graph relationships found; query intent matched evidence (BRIDGE_RELATIONSHIP); some claims remain unsupported; verification restricted the answer",
+            "Verification: answer incomplete for requested relationship",
+            "Verification: answer exceeded query-focused evidence scope",
+            "Verification: PARTIALLY_SUPPORTED — generated claim exceeded evidence"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "Typing connects PEP-526 and PEP-604.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — requested bridge entity found; path matches bridge relationship intent; valid graph relationships found; query intent matched evidence (BRIDGE_RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: answer claims not grounded"
+          ]
+        },
+        "divergesAcrossRuns": false
+      }
+    }
+  },
+  {
+    "id": "E",
+    "query": "Who proposed PEP-484, what did it introduce, and what concern did it address?",
+    "runs": 10,
+    "stageStability": {
+      "understanding": {
+        "uniqueCount": 1,
+        "values": [
+          "b7a81f6c2a6453f6"
+        ],
+        "stable": true
+      },
+      "scope": {
+        "uniqueCount": 1,
+        "values": [
+          "4811e42bed4fedbf"
+        ],
+        "stable": true
+      },
+      "answerEvidenceSorted": {
+        "uniqueCount": 1,
+        "values": [
+          "8cb054cb4ea446d1"
+        ],
+        "stable": true
+      },
+      "answerEvidenceOrder": {
+        "uniqueCount": 1,
+        "values": [
+          "c6eb659fa74b849e"
+        ],
+        "stable": true
+      },
+      "path": {
+        "uniqueCount": 1,
+        "values": [
+          "fed54429b660d8fe"
+        ],
+        "stable": true
+      },
+      "structuredContext": {
+        "uniqueCount": 1,
+        "values": [
+          "4982df9205e6464f"
+        ],
+        "stable": true
+      },
+      "templateAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "81e482499801e92b"
+        ],
+        "stable": true
+      },
+      "attributionByAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "2c69623db85decd3"
+        ],
+        "stable": true
+      },
+      "verificationByAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "199ab80480173edf"
+        ],
+        "stable": true
+      }
+    },
+    "firstDivergentStage": null,
+    "divergenceClass": "deterministic_upstream_verification_depends_on_answer_form",
+    "templateAnswerStable": true,
+    "templateAnswer": "Type Hints was proposed by Guido van Rossum. Type Hints introduced Typing. Type Hints addressed Readability.",
+    "understanding": {
+      "intent": "COMPOUND",
+      "entities": [
+        "PEP-484"
+      ],
+      "relationshipRequested": [
+        "PROPOSED_BY",
+        "ADDRESSES",
+        "INTRODUCES"
+      ],
+      "claims": [
+        {
+          "subject": "PEP-484",
+          "predicate": "PROPOSED_BY",
+          "object": "",
+          "inferenceMode": "typed_edge"
+        },
+        {
+          "subject": "PEP-484",
+          "predicate": "INTRODUCES",
+          "object": "",
+          "inferenceMode": "typed_edge"
+        },
+        {
+          "subject": "PEP-484",
+          "predicate": "ADDRESSES",
+          "object": "",
+          "inferenceMode": "typed_edge"
+        }
+      ],
+      "strategy": "single-hop",
+      "maxDepth": 1
+    },
+    "path": {
+      "kind": "CLAIM_SET",
+      "hopCount": 0,
+      "supportsClaim": true,
+      "relationships": [
+        "PROPOSED_BY",
+        "INTRODUCES",
+        "ADDRESSES"
+      ],
+      "explanation": "Independent claim evidence: PROPOSED_BY, INTRODUCES, ADDRESSES."
+    },
+    "answerEvidenceOrder": [
+      "rel:proposal:PEP-484|PROPOSED_BY|author:guido@proposal:PEP-484",
+      "ent:proposal:PEP-484",
+      "rel:proposal:PEP-484|INTRODUCES|feature:typing@proposal:PEP-484",
+      "rel:proposal:PEP-484|INTRODUCES|feature:typing@feature:typing",
+      "rel:proposal:PEP-484|ADDRESSES|concern:readability@proposal:PEP-484",
+      "ent:feature:typing",
+      "ent:concern:readability",
+      "ent:author:guido"
+    ],
+    "structuredContext": {
+      "requestedPredicates": [
+        "PROPOSED_BY",
+        "ADDRESSES",
+        "INTRODUCES"
+      ],
+      "evidenceKeys": [
+        "rel:proposal:PEP-484|PROPOSED_BY|author:guido@proposal:PEP-484",
+        "ent:proposal:PEP-484",
+        "rel:proposal:PEP-484|INTRODUCES|feature:typing@proposal:PEP-484",
+        "rel:proposal:PEP-484|INTRODUCES|feature:typing@feature:typing",
+        "rel:proposal:PEP-484|ADDRESSES|concern:readability@proposal:PEP-484",
+        "ent:feature:typing",
+        "ent:concern:readability",
+        "ent:author:guido"
+      ]
+    },
+    "answerFormComparison": [
+      {
+        "answer": "Type Hints was proposed by Guido van Rossum. Type Hints introduced Typing. Type Hints addressed Readability.",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — valid graph relationships found; answer uses independent claim evidence (not a graph path); query intent matched evidence (COMPOUND); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      },
+      {
+        "answer": "PEP-484 was proposed by Guido van Rossum. PEP-484 introduced Typing. PEP-484 addressed Readability.",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — valid graph relationships found; answer uses independent claim evidence (not a graph path); query intent matched evidence (COMPOUND); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      },
+      {
+        "answer": "Guido van Rossum proposed Type Hints.",
+        "attribution": true,
+        "status": "PARTIALLY_SUPPORTED",
+        "confidence": 0.65,
+        "reasons": [
+          "Compound answer covers only part of the requested clauses",
+          "Confidence: MEDIUM (score=0.65) — valid graph relationships found; answer uses independent claim evidence (not a graph path); query intent matched evidence (COMPOUND); some claims remain unsupported; verification restricted the answer",
+          "Verification: compound answer incomplete",
+          "Verification: PARTIALLY_SUPPORTED — answer does not fully address requested intent"
+        ]
+      }
+    ],
+    "probeDivergence": {
+      "Type Hints was proposed by Guido van Rossum. Type Hints introduced Typing. Type Hints addressed Readability.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — valid graph relationships found; answer uses independent claim evidence (not a graph path); query intent matched evidence (COMPOUND); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "PEP-484 was proposed by Guido van Rossum. PEP-484 introduced Typing. PEP-484 addressed Readability.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — valid graph relationships found; answer uses independent claim evidence (not a graph path); query intent matched evidence (COMPOUND); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "Guido van Rossum proposed Type Hints.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "PARTIALLY_SUPPORTED"
+        ],
+        "sample": {
+          "status": "PARTIALLY_SUPPORTED",
+          "confidence": 0.65,
+          "reasons": [
+            "Compound answer covers only part of the requested clauses",
+            "Confidence: MEDIUM (score=0.65) — valid graph relationships found; answer uses independent claim evidence (not a graph path); query intent matched evidence (COMPOUND); some claims remain unsupported; verification restricted the answer",
+            "Verification: compound answer incomplete",
+            "Verification: PARTIALLY_SUPPORTED — answer does not fully address requested intent"
+          ]
+        },
+        "divergesAcrossRuns": false
+      }
+    }
+  },
+  {
+    "id": "F",
+    "query": "What did PEP-526 introduce?",
+    "runs": 10,
+    "stageStability": {
+      "understanding": {
+        "uniqueCount": 1,
+        "values": [
+          "96bcac516a48f3d7"
+        ],
+        "stable": true
+      },
+      "scope": {
+        "uniqueCount": 1,
+        "values": [
+          "dbb3e25a038f52e4"
+        ],
+        "stable": true
+      },
+      "answerEvidenceSorted": {
+        "uniqueCount": 1,
+        "values": [
+          "238b99831bcff40f"
+        ],
+        "stable": true
+      },
+      "answerEvidenceOrder": {
+        "uniqueCount": 1,
+        "values": [
+          "08168bb097149925"
+        ],
+        "stable": true
+      },
+      "path": {
+        "uniqueCount": 1,
+        "values": [
+          "14b814a3b83f9d62"
+        ],
+        "stable": true
+      },
+      "structuredContext": {
+        "uniqueCount": 1,
+        "values": [
+          "d4dda85bb44c6638"
+        ],
+        "stable": true
+      },
+      "templateAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "e8b162f6aac69e17"
+        ],
+        "stable": true
+      },
+      "attributionByAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "3d70090acef250e3"
+        ],
+        "stable": true
+      },
+      "verificationByAnswer": {
+        "uniqueCount": 1,
+        "values": [
+          "62576ad623994983"
+        ],
+        "stable": true
+      }
+    },
+    "firstDivergentStage": null,
+    "divergenceClass": "deterministic_upstream_verification_depends_on_answer_form",
+    "templateAnswerStable": true,
+    "templateAnswer": "Variable Annotations introduced Typing.",
+    "understanding": {
+      "intent": "RELATIONSHIP",
+      "entities": [
+        "PEP-526"
+      ],
+      "relationshipRequested": [
+        "INTRODUCES"
+      ],
+      "claims": [
+        {
+          "subject": "PEP-526",
+          "predicate": "INTRODUCES",
+          "object": "",
+          "inferenceMode": "typed_edge"
+        }
+      ],
+      "strategy": "single-hop",
+      "maxDepth": 1
+    },
+    "path": {
+      "kind": "DIRECT",
+      "hopCount": 1,
+      "supportsClaim": true,
+      "relationships": [
+        "INTRODUCES"
+      ],
+      "explanation": "Attested relationship INTRODUCES present in evidence."
+    },
+    "answerEvidenceOrder": [
+      "rel:proposal:PEP-526|INTRODUCES|feature:typing@proposal:PEP-526",
+      "ent:proposal:PEP-526",
+      "rel:proposal:PEP-526|INTRODUCES|feature:typing@feature:typing",
+      "ent:feature:typing"
+    ],
+    "structuredContext": {
+      "requestedPredicates": [
+        "INTRODUCES"
+      ],
+      "evidenceKeys": [
+        "rel:proposal:PEP-526|INTRODUCES|feature:typing@proposal:PEP-526",
+        "ent:proposal:PEP-526",
+        "rel:proposal:PEP-526|INTRODUCES|feature:typing@feature:typing",
+        "ent:feature:typing"
+      ]
+    },
+    "answerFormComparison": [
+      {
+        "answer": "Variable Annotations introduced Typing.",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      },
+      {
+        "answer": "Typing",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      },
+      {
+        "answer": "PEP-526 introduced Typing.",
+        "attribution": true,
+        "status": "SUPPORTED",
+        "confidence": 1,
+        "reasons": [
+          "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+          "Verification: answer matches intent and evidence bounds",
+          "Verification: SUPPORTED — answer matches intent and evidence",
+          "Verification: SUPPORTED — answer accepted"
+        ]
+      }
+    ],
+    "probeDivergence": {
+      "Variable Annotations introduced Typing.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "Typing": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      },
+      "PEP-526 introduced Typing.": {
+        "attributionValues": [
+          "true"
+        ],
+        "verificationStatuses": [
+          "SUPPORTED"
+        ],
+        "sample": {
+          "status": "SUPPORTED",
+          "confidence": 1,
+          "reasons": [
+            "Confidence: HIGH (score=1) — direct graph relationship found; valid graph relationships found; query intent matched evidence (RELATIONSHIP); verification passed; all requested claims supported",
+            "Verification: answer matches intent and evidence bounds",
+            "Verification: SUPPORTED — answer matches intent and evidence",
+            "Verification: SUPPORTED — answer accepted"
+          ]
+        },
+        "divergesAcrossRuns": false
+      }
+    }
+  }
+]

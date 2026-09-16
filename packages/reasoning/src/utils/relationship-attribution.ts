@@ -7,7 +7,8 @@ import type {
 } from "../types/reasoning-context.js";
 
 import {
-  entityMatchesPhrase
+  entityMatchesPhrase,
+  normalizeEntityPhrase
 } from "./detect-relationship-between-query.js";
 
 import {
@@ -23,14 +24,19 @@ import {
  * do not bleed into a single S-P-O capture.
  */
 const NOUN_PHRASE =
-  String.raw`[A-Za-z][A-Za-z0-9_-]*(?:\s+(?!and\b)[A-Za-z][A-Za-z0-9_-]*){0,5}`;
+  String.raw`[A-Za-z][A-Za-z0-9_-]*(?:\s+(?!and\b|was\b|by\b|introduced\b|introduces\b|introduce\b|addressed\b|addresses\b|proposed\b|resulted\b|implemented\b)[A-Za-z][A-Za-z0-9_-]*){0,5}`;
 
 const CLAUSE_STOP =
-  String.raw`(?=\s+and\s+(?:introduced|introduces|addresses|addressed|was proposed|proposed by|resulted|implemented)|[.,;]|$)`;
+  String.raw`(?=\s+and\s+(?:introduced|introduces|addresses|addressed|was proposed|proposed by|resulted|implemented|was introduced by)|[.,;]|$)`;
 
 const ATTRIBUTION_CHECKS: Array<{
   type: string;
   pattern: RegExp;
+  /**
+   * When true, regex groups are [patient, agent] and map to edge to/from
+   * for INTRODUCES-style passives ("Typing was introduced by X").
+   */
+  passive?: boolean;
 }> = [
   {
     type: "ADDRESSES",
@@ -44,7 +50,16 @@ const ATTRIBUTION_CHECKS: Array<{
     type: "INTRODUCES",
     pattern:
       new RegExp(
-        String.raw`\b(${NOUN_PHRASE})\s+(?:introduces|introduced|introduce)\s+(${NOUN_PHRASE})${CLAUSE_STOP}`,
+        String.raw`\b(${NOUN_PHRASE})\s+(?:introduces|(?<!was\s)introduced|introduce)\s+(${NOUN_PHRASE})${CLAUSE_STOP}`,
+        "gi"
+      )
+  },
+  {
+    type: "INTRODUCES",
+    passive: true,
+    pattern:
+      new RegExp(
+        String.raw`\b(${NOUN_PHRASE})\s+was introduced by\s+(${NOUN_PHRASE})${CLAUSE_STOP}`,
         "gi"
       )
   },
@@ -69,6 +84,30 @@ const ATTRIBUTION_CHECKS: Array<{
     pattern:
       new RegExp(
         String.raw`\b(${NOUN_PHRASE})\s+was implemented in\s+(${NOUN_PHRASE})${CLAUSE_STOP}`,
+        "gi"
+      )
+  },
+  {
+    type: "INTRODUCES",
+    pattern:
+      new RegExp(
+        String.raw`\b(${NOUN_PHRASE})\s*->\s*INTRODUCES\s*->\s*(${NOUN_PHRASE})`,
+        "gi"
+      )
+  },
+  {
+    type: "ADDRESSES",
+    pattern:
+      new RegExp(
+        String.raw`\b(${NOUN_PHRASE})\s*->\s*ADDRESSES\s*->\s*(${NOUN_PHRASE})`,
+        "gi"
+      )
+  },
+  {
+    type: "PROPOSED_BY",
+    pattern:
+      new RegExp(
+        String.raw`\b(${NOUN_PHRASE})\s*->\s*PROPOSED_BY\s*->\s*(${NOUN_PHRASE})`,
         "gi"
       )
   }
@@ -124,19 +163,21 @@ const ELIDED_CHECKS: Array<{
 ];
 
 const STOP_SUBJECT =
-  /^(?:and|or|but|the|a|an|it|this|that|they|he|she)$/i;
+  /^(?:and|or|but|the|a|an|it|this|that|they|he|she|was|by|been)$/i;
+
+const RELATIONSHIP_CUE =
+  /\b(?:introduced|introduces|introduce|addressed|addresses|was proposed by|proposed by|resulted in|results in|implemented in|was introduced by|->\s*(?:INTRODUCES|ADDRESSES|PROPOSED_BY|RESULTS_IN|IMPLEMENTED_IN)\s*->)/i;
 
 /**
  * Reject answers that linguistically attribute a relationship to the
  * wrong endpoint (e.g. "Typing addressed Readability" when the edge is
  * Proposal --ADDRESSES--> Readability).
  *
- * For COMPOUND / CLAIM_SET answers, each asserted S-P-O is checked against
- * its own bound relationship evidence — not as one graph path.
+ * Validation is against bound ClaimEvidence / scoped answerEvidence
+ * relationships — not a rediscovery over an unbound graph.
  *
- * Subject verbalizations may use entity labels or property aliases
- * (e.g. title "Type Hints" for subject PEP-484) when they resolve to the
- * same endpoint entity that owns the attested edge.
+ * Subject/object verbalizations may use entity labels or property aliases
+ * when they resolve to the same bound endpoint.
  */
 export function relationshipAttributionIsGrounded(
   answer: string,
@@ -144,7 +185,7 @@ export function relationshipAttributionIsGrounded(
 ): boolean {
 
   const relationships =
-    collectRelationships(context);
+    collectBoundRelationships(context);
 
   if (relationships.length === 0) {
     return true;
@@ -158,6 +199,38 @@ export function relationshipAttributionIsGrounded(
 
   const assertions =
     collectAttributionAssertions(answer);
+
+  if (assertions.length === 0) {
+    /*
+     * Typed relationship asks must not vacuous-pass on object-only answers
+     * such as "Typing" when bound INTRODUCES evidence exists.
+     */
+    if (!requiresTypedRelationshipAssertion(context)) {
+      return true;
+    }
+
+    if (!RELATIONSHIP_CUE.test(answer)) {
+      return false;
+    }
+
+    /*
+     * Terse / arrow forms that name both endpoints of every bound edge.
+     */
+    return relationships.every(relationship =>
+      answerMentionsEndpoint(
+        answer,
+        relationship.from,
+        catalog,
+        subjectPhrases
+      ) &&
+      answerMentionsEndpoint(
+        answer,
+        relationship.to,
+        catalog,
+        subjectPhrases
+      )
+    );
+  }
 
   for (const assertion of assertions) {
     const grounded =
@@ -208,10 +281,15 @@ function collectAttributionAssertions(
     check.pattern.lastIndex = 0;
 
     for (const match of answer.matchAll(check.pattern)) {
-      const source =
+      const first =
         (match[1] ?? "").trim();
-      const target =
+      const second =
         (match[2] ?? "").trim();
+
+      const source =
+        check.passive ? second : first;
+      const target =
+        check.passive ? first : second;
 
       if (
         !source ||
@@ -223,8 +301,8 @@ function collectAttributionAssertions(
 
       raw.push({
         type: check.type,
-        source,
-        target,
+        source: normalizeEntityPhrase(source) || source,
+        target: normalizeEntityPhrase(target) || target,
         index: match.index ?? 0
       });
     }
@@ -244,7 +322,7 @@ function collectAttributionAssertions(
       raw.push({
         type: check.type,
         source: "",
-        target,
+        target: normalizeEntityPhrase(target) || target,
         index: match.index ?? 0,
         elided: true
       });
@@ -279,7 +357,11 @@ function collectAttributionAssertions(
 
 }
 
-function collectRelationships(
+/**
+ * Prefer relationships bound on ClaimEvidence; fall back to scoped
+ * answerEvidence / items (already query-focused — not full-graph search).
+ */
+function collectBoundRelationships(
   context: ReasoningContext
 ): KnowledgeRelationship[] {
 
@@ -288,25 +370,19 @@ function collectRelationships(
 
   const rows: KnowledgeRelationship[] = [];
 
-  for (const item of [
-    ...context.items,
-    ...context.evidence.map(entry => ({
-      relationship: entry.relationship
-    }))
-  ]) {
-
-    const relationship =
-      item.relationship;
+  function push(
+    relationship: KnowledgeRelationship | undefined
+  ): void {
 
     if (!relationship) {
-      continue;
+      return;
     }
 
     const key =
       `${relationship.from}|${relationship.type}|${relationship.to}`;
 
     if (seen.has(key)) {
-      continue;
+      return;
     }
 
     seen.add(key);
@@ -314,7 +390,71 @@ function collectRelationships(
 
   }
 
+  for (const claim of context.answerContext?.claimEvidence ?? []) {
+    for (const item of claim.evidence) {
+      if (
+        item.relationship &&
+        item.relationship.type === claim.predicate
+      ) {
+        push(item.relationship);
+      }
+    }
+  }
+
+  if (rows.length > 0) {
+    return rows;
+  }
+
+  for (const item of [
+    ...context.items,
+    ...context.evidence.map(entry => ({
+      relationship: entry.relationship
+    })),
+    ...(context.answerContext?.answerEvidence ?? []).map(entry => ({
+      relationship: entry.relationship
+    }))
+  ]) {
+    push(item.relationship);
+  }
+
   return rows;
+
+}
+
+function requiresTypedRelationshipAssertion(
+  context: ReasoningContext
+): boolean {
+
+  const understanding =
+    context.understanding ??
+    (context.query
+      ? understandQuery(context.query)
+      : undefined);
+
+  if (!understanding) {
+    return false;
+  }
+
+  if (understanding.requireTypedEdge) {
+    return true;
+  }
+
+  if (
+    understanding.intent === "RELATIONSHIP" ||
+    understanding.intent === "DIRECT_RELATIONSHIP" ||
+    understanding.intent === "CONNECTED_RELATIONSHIP" ||
+    understanding.intent === "BRIDGE_RELATIONSHIP" ||
+    understanding.intent === "COMPOUND"
+  ) {
+    return true;
+  }
+
+  const predicates =
+    context.answerContext?.requestedPredicates ??
+    understanding.focusRelationships ??
+    [];
+
+  return predicates.length > 0;
 
 }
 
@@ -358,7 +498,10 @@ function buildEntityCatalog(
     });
   }
 
-  for (const item of context.evidence) {
+  for (const item of [
+    ...context.evidence,
+    ...(context.answerContext?.answerEvidence ?? [])
+  ]) {
     upsert({
       id: item.entity.id,
       label: item.entity.label,
@@ -367,7 +510,48 @@ function buildEntityCatalog(
     });
   }
 
-  for (const relationship of collectRelationships(context)) {
+  for (const claim of context.answerContext?.claimEvidence ?? []) {
+    for (const item of claim.evidence) {
+      upsert({
+        id: item.entity.id,
+        label: item.entity.label,
+        source: item.entity.source,
+        properties: {
+          ...(item.entity.properties ?? {}),
+          ...(claim.subject
+            ? { claimSubject: claim.subject }
+            : {}),
+          ...(claim.object
+            ? { claimObject: claim.object }
+            : {})
+        }
+      });
+
+      if (item.relationship) {
+        if (!catalog.has(item.relationship.from) && claim.subject) {
+          upsert({
+            ...synthesizeEndpoint(item.relationship.from),
+            properties: {
+              ...synthesizeEndpoint(item.relationship.from).properties,
+              claimSubject: claim.subject
+            }
+          });
+        }
+
+        if (!catalog.has(item.relationship.to) && claim.object) {
+          upsert({
+            ...synthesizeEndpoint(item.relationship.to),
+            properties: {
+              ...synthesizeEndpoint(item.relationship.to).properties,
+              claimObject: claim.object
+            }
+          });
+        }
+      }
+    }
+  }
+
+  for (const relationship of collectBoundRelationships(context)) {
     if (!catalog.has(relationship.from)) {
       catalog.set(
         relationship.from,
@@ -419,9 +603,6 @@ function preferLabel(
     return next || current;
   }
 
-  /*
-   * Prefer human labels over raw ids when merging catalog rows.
-   */
   if (current.includes(":") && !next.includes(":")) {
     return next;
   }
@@ -447,7 +628,17 @@ function collectRequestedSubjectPhrases(
     phrases.add(subject);
   }
 
+  for (const subject of context.answerContext?.requestedSubjects ?? []) {
+    phrases.add(subject);
+  }
+
   for (const claim of understanding?.claims ?? []) {
+    if (claim.subject?.trim()) {
+      phrases.add(claim.subject.trim());
+    }
+  }
+
+  for (const claim of context.answerContext?.claimEvidence ?? []) {
     if (claim.subject?.trim()) {
       phrases.add(claim.subject.trim());
     }
@@ -479,31 +670,48 @@ function endpointPhraseMatches(
   subjectPhrases: string[]
 ): boolean {
 
+  const normalized =
+    normalizeEntityPhrase(phrase) || phrase;
+
   const entity =
     catalog.get(endpointId) ??
     synthesizeEndpoint(endpointId);
 
-  if (entityMatchesPhrase(entity, phrase)) {
+  if (
+    entityMatchesPhrase(entity, phrase) ||
+    entityMatchesPhrase(entity, normalized)
+  ) {
     return true;
   }
 
-  /*
-   * Compound verbalization: answer uses an alternate label/alias for the
-   * requested subject that owns this endpoint (e.g. "Type Hints" for PEP-484).
-   */
   for (const subject of subjectPhrases) {
-    if (!entityMatchesPhrase(entity, subject)) {
+    if (
+      !entityMatchesPhrase(entity, subject) &&
+      !entityMatchesPhrase(entity, normalizeEntityPhrase(subject) || subject)
+    ) {
       continue;
     }
 
-    if (phrasesAlign(phrase, subject)) {
+    if (
+      phrasesAlign(normalized, subject) ||
+      phrasesAlign(normalized, normalizeEntityPhrase(subject) || subject)
+    ) {
       return true;
     }
 
     for (const candidate of catalog.values()) {
       if (
-        entityMatchesPhrase(candidate, subject) &&
-        entityMatchesPhrase(candidate, phrase)
+        (
+          entityMatchesPhrase(candidate, subject) ||
+          entityMatchesPhrase(
+            candidate,
+            normalizeEntityPhrase(subject) || subject
+          )
+        ) &&
+        (
+          entityMatchesPhrase(candidate, phrase) ||
+          entityMatchesPhrase(candidate, normalized)
+        )
       ) {
         return true;
       }
@@ -511,6 +719,84 @@ function endpointPhraseMatches(
   }
 
   return false;
+
+}
+
+function answerMentionsEndpoint(
+  answer: string,
+  endpointId: string,
+  catalog: Map<string, AttributionEntity>,
+  subjectPhrases: string[]
+): boolean {
+
+  const entity =
+    catalog.get(endpointId) ??
+    synthesizeEndpoint(endpointId);
+
+  const candidates =
+    uniqueNonEmpty([
+      entity.label,
+      endpointId,
+      endpointId.includes(":")
+        ? endpointId.slice(endpointId.indexOf(":") + 1)
+        : endpointId,
+      ...Object.values(entity.properties ?? {})
+        .filter(
+          value =>
+            typeof value === "string" ||
+            typeof value === "number"
+        )
+        .map(String),
+      ...subjectPhrases.filter(subject =>
+        entityMatchesPhrase(entity, subject)
+      )
+    ]);
+
+  const lower =
+    answer.toLowerCase();
+
+  return candidates.some(candidate => {
+    const normalized =
+      normalizeEntityPhrase(candidate) || candidate;
+
+    return (
+      lower.includes(candidate.toLowerCase()) ||
+      lower.includes(normalized.toLowerCase()) ||
+      compact(answer).includes(compact(normalized))
+    );
+  });
+
+}
+
+function uniqueNonEmpty(
+  values: string[]
+): string[] {
+
+  const seen =
+    new Set<string>();
+
+  const out: string[] = [];
+
+  for (const value of values) {
+    const trimmed =
+      value.trim();
+
+    if (!trimmed) {
+      continue;
+    }
+
+    const key =
+      trimmed.toLowerCase();
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    out.push(trimmed);
+  }
+
+  return out;
 
 }
 

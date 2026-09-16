@@ -92,6 +92,7 @@ export {
 export {
   detectRelationshipBetweenQuery,
   entityMatchesPhrase,
+  normalizeEntityPhrase,
   queryRequestsDirectRelationship
 } from "./utils/detect-relationship-between-query.js";
 

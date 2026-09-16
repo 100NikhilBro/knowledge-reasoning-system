@@ -182,6 +182,13 @@ export function entityMatchesPhrase(
     return false;
   }
 
+  const normalized =
+    normalizeEntityPhrase(needle);
+
+  if (!normalized) {
+    return false;
+  }
+
   const fields: string[] = [
     entity.id,
     entity.label,
@@ -194,7 +201,42 @@ export function entityMatchesPhrase(
       .map(String)
   ];
 
-  return fields.some(field => textMatchesPhrase(field, needle));
+  return fields.some(field => {
+    const normalizedField =
+      normalizeEntityPhrase(field);
+
+    return (
+      textMatchesPhrase(field, needle) ||
+      textMatchesPhrase(field, normalized) ||
+      (
+        normalizedField.length > 0 &&
+        (
+          textMatchesPhrase(normalizedField, needle) ||
+          textMatchesPhrase(normalizedField, normalized)
+        )
+      )
+    );
+  });
+
+}
+
+/**
+ * Deterministic NL cleanup for entity phrases used in attribution /
+ * endpoint resolution. Does not invent aliases.
+ */
+export function normalizeEntityPhrase(
+  phrase: string
+): string {
+
+  return phrase
+    .trim()
+    .replace(/[?"'.]+$/g, "")
+    .replace(/^(?:the|a|an)\s+/i, "")
+    .replace(
+      /\s+(?:feature|proposal|concern|decision|author|entity|module|protocol)s?\s*$/i,
+      ""
+    )
+    .trim();
 
 }
 
@@ -206,15 +248,14 @@ function cleanEndpoint(
     return undefined;
   }
 
-  return value
-    .trim()
-    .replace(/[?.,;:]+$/g, "")
-    .replace(/^(?:the|a|an)\s+/i, "")
-    .replace(
-      /\s+(?:feature|concern|proposal|author|entity|module|protocol)\s*$/i,
-      ""
-    )
-    .trim();
+  const cleaned =
+    normalizeEntityPhrase(
+      value
+        .trim()
+        .replace(/[?.,;:]+$/g, "")
+    );
+
+  return cleaned || undefined;
 
 }
 

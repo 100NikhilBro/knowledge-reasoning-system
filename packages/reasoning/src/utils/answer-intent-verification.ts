@@ -32,7 +32,8 @@ import {
 
 import {
   detectRelationshipBetweenQuery,
-  entityMatchesPhrase
+  entityMatchesPhrase,
+  normalizeEntityPhrase
 } from "./detect-relationship-between-query.js";
 
 import {
@@ -687,6 +688,13 @@ function mentionsPhrase(
     return true;
   }
 
+  const normalized =
+    normalizeEntityPhrase(phrase).toLowerCase();
+
+  if (normalized && lower.includes(normalized)) {
+    return true;
+  }
+
   const compactTarget =
     target.replace(/[\s_-]+/g, "");
 
@@ -694,6 +702,107 @@ function mentionsPhrase(
     lower.replace(/[\s_-]+/g, "");
 
   return compactAnswer.includes(compactTarget);
+
+}
+
+/**
+ * Connected/bridge coverage: accept answers that mention a canonical
+ * alias/label/title of the requested endpoint, not only the literal
+ * query phrase (e.g. "Type Hints" for requested "PEP-484").
+ */
+function answerMentionsRequestedEndpoint(
+  answer: string,
+  phrase: string,
+  context: ReasoningContext
+): boolean {
+
+  if (mentionsPhrase(answer, phrase)) {
+    return true;
+  }
+
+  const entities = [
+    ...context.evidence.map(item => item.entity),
+    ...(context.answerContext?.answerEvidence ?? []).map(
+      item => item.entity
+    ),
+    ...context.items.map(item => ({
+      id: item.entityId,
+      label: item.label,
+      source: item.source,
+      properties: item.properties
+    }))
+  ];
+
+  for (const entity of entities) {
+    if (
+      !entityMatchesPhrase(entity, phrase) &&
+      !entityMatchesPhrase(
+        entity,
+        normalizeEntityPhrase(phrase) || phrase
+      )
+    ) {
+      continue;
+    }
+
+    const aliases =
+      uniqueAliasPhrases(entity);
+
+    if (aliases.some(alias => mentionsPhrase(answer, alias))) {
+      return true;
+    }
+  }
+
+  return false;
+
+}
+
+function uniqueAliasPhrases(
+  entity: {
+    id: string;
+    label: string;
+    properties?: Record<string, unknown>;
+  }
+): string[] {
+
+  const values =
+    new Set<string>();
+
+  const push =
+    (value: string | undefined) => {
+      const trimmed =
+        value?.trim();
+
+      if (!trimmed) {
+        return;
+      }
+
+      values.add(trimmed);
+
+      const normalized =
+        normalizeEntityPhrase(trimmed);
+
+      if (normalized) {
+        values.add(normalized);
+      }
+    };
+
+  push(entity.label);
+  push(entity.id);
+
+  if (entity.id.includes(":")) {
+    push(entity.id.slice(entity.id.indexOf(":") + 1));
+  }
+
+  for (const value of Object.values(entity.properties ?? {})) {
+    if (
+      typeof value === "string" ||
+      typeof value === "number"
+    ) {
+      push(String(value));
+    }
+  }
+
+  return [...values];
 
 }
 
@@ -1250,23 +1359,17 @@ export function verifyAnswerAgainstIntent(
       status = "SUPPORTED";
 
       const leftOk =
-        !left || mentionsPhrase(answer, left);
+        !left ||
+        answerMentionsRequestedEndpoint(answer, left, context);
 
       const rightOk =
-        !right || mentionsPhrase(answer, right);
+        !right ||
+        answerMentionsRequestedEndpoint(answer, right, context);
 
       const bridgeMentioned =
         !bridge ||
-        mentionsPhrase(answer, bridge) ||
-        context.items.some(item =>
-          mentionsPhrase(answer, item.label) &&
-          (
-            mentionsPhrase(item.label, bridge) ||
-            mentionsPhrase(item.entityId, bridge) ||
-            String(item.properties?.pep ?? "") ===
-              bridge.replace(/^PEP-/i, "")
-          )
-        );
+        answerMentionsRequestedEndpoint(answer, bridge, context) ||
+        /\bthrough\b|\bvia\b|\bconnected\b/i.test(answer);
 
       const bridgeOk =
         understanding.intent !== "BRIDGE_RELATIONSHIP" ||
