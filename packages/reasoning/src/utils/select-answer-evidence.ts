@@ -530,8 +530,20 @@ function selectPathEvidence(
       ...scope.focusObjects
     ]);
 
-  if (endpointPhrases.length === 0) {
-    return selectFocusedRelationshipEvidence(scope, evidence);
+  /*
+   * Open multi-hop / related-entity asks name one focus subject without an
+   * explicit second endpoint. Keep that subject's relationship neighborhood
+   * (all predicates) rather than dropping every spoke.
+   */
+  if (endpointPhrases.length < 2) {
+    return selectFocusedRelationshipEvidence(
+      {
+        ...scope,
+        requestedPredicates: [],
+        focusObjects: []
+      },
+      evidence
+    );
   }
 
   const endpointIds =
@@ -559,32 +571,11 @@ function selectPathEvidence(
     /*
      * Bridge/connected answer context: only edges whose both endpoints
      * are among the requested path participants (A, B, and optional X).
+     * Do not re-expand via incidental path provenance — that reintroduces
+     * unrelated neighborhood edges (proposers, decisions, etc.).
      */
     if (fromIn && toIn) {
       retained.push(item);
-      continue;
-    }
-
-    /*
-     * Path provenance that explicitly includes the requested endpoints.
-     */
-    if (
-      item.path &&
-      pathTouchesPhrases(item.path.nodes ?? [], endpointPhrases, evidence)
-    ) {
-      const pathRels =
-        item.path.relationships ?? [];
-
-      if (
-        pathRels.some(rel =>
-          rel.from === item.relationship!.from &&
-          rel.to === item.relationship!.to &&
-          rel.type === item.relationship!.type
-        ) ||
-        pathRels.length === 0
-      ) {
-        retained.push(item);
-      }
     }
   }
 
@@ -758,38 +749,13 @@ function relationshipOwnedBySubject(
       properties: {}
     };
 
-  const to =
-    findEntity(evidence, relationship.to) ??
-    {
-      id: relationship.to,
-      label: relationship.to,
-      source: "",
-      properties: {}
-    };
-
   /*
-   * Subject must be an endpoint of the edge. Prefer the relationship
-   * source (from) for outgoing ontology edges; also accept when the
-   * evidence row itself is the named subject carrying the edge.
+   * Subject must own the relationship as its source endpoint.
+   * Shared objects (e.g. many proposals INTRODUCES Typing) must not
+   * satisfy a claim about a different subject.
    */
   return subjects.some(phrase =>
-    entityMatchesPhrase(from, phrase) ||
-    (
-      entityMatchesPhrase(item.entity, phrase) &&
-      (
-        entityMatchesPhrase(from, phrase) ||
-        item.entity.id === relationship.from ||
-        item.entity.id === relationship.to
-      )
-    ) ||
-    (
-      /*
-       * Rare incoming presentation: subject is the `to` endpoint and the
-       * evidence row is that subject.
-       */
-      entityMatchesPhrase(to, phrase) &&
-      item.entity.id === relationship.to
-    )
+    entityMatchesPhrase(from, phrase)
   );
 
 }
@@ -918,31 +884,6 @@ function resolvePhraseIds(
   }
 
   return ids;
-
-}
-
-function pathTouchesPhrases(
-  nodes: KnowledgeEntity[],
-  phrases: string[],
-  evidence: Evidence[]
-): boolean {
-
-  if (nodes.length === 0 || phrases.length === 0) {
-    return false;
-  }
-
-  const matched =
-    phrases.filter(phrase =>
-      nodes.some(node =>
-        entityMatchesPhrase(node, phrase)
-      ) ||
-      evidence.some(item =>
-        entityMatchesPhrase(item.entity, phrase) &&
-        nodes.some(node => node.id === item.entity.id)
-      )
-    );
-
-  return matched.length >= Math.min(2, phrases.length);
 
 }
 
@@ -1126,5 +1067,140 @@ export function isPredicateInAnswerScope(
   }
 
   return scope.requestedPredicates.includes(predicate);
+
+}
+
+/**
+ * Evidence associated with one atomic requested claim.
+ */
+export interface ClaimEvidence {
+  claimId: string;
+  subject: string;
+  predicate: string;
+  object: string;
+  evidence: Evidence[];
+}
+
+/**
+ * Structured answer context passed to generation/verification.
+ * Already query-scoped — do not re-merge raw retrieval evidence.
+ */
+export interface StructuredAnswerContext {
+  query: string;
+  intent: QueryIntentKind;
+  requestedClaims: LogicalClaim[];
+  requestedSubjects: string[];
+  requestedPredicates: string[];
+  scope: AnswerEvidenceScope;
+  answerEvidence: Evidence[];
+  claimEvidence: ClaimEvidence[];
+  provenance: Array<{
+    entityId: string;
+    source: string;
+    relationshipType?: string;
+  }>;
+}
+
+/**
+ * Bind answer-scoped evidence to each requested atomic claim.
+ */
+export function bindClaimEvidence(
+  scope: AnswerEvidenceScope,
+  answerEvidence: Evidence[]
+): ClaimEvidence[] {
+
+  const claims =
+    scope.requestedClaims.length > 0
+      ? scope.requestedClaims
+      : scope.requestedPredicates.map((predicate, index) => ({
+          subject: scope.focusSubjects[0] ?? "",
+          predicate,
+          object: scope.focusObjects[0] ?? "",
+          inferenceMode: "typed_edge" as const,
+          claimId: `focus-${index}`
+        }));
+
+  return claims.map((claim, index) => {
+    const subject =
+      claim.subject || scope.focusSubjects[0] || "";
+    const predicate =
+      claim.predicate;
+    const object =
+      ("object" in claim ? claim.object : "") || "";
+
+    const matched =
+      answerEvidence.filter(item => {
+        if (!item.relationship) {
+          return (
+            Boolean(subject) &&
+            entityMatchesPhrase(item.entity, subject)
+          );
+        }
+
+        if (item.relationship.type !== predicate) {
+          return false;
+        }
+
+        if (
+          subject &&
+          !relationshipOwnedBySubject(item, answerEvidence, subject)
+        ) {
+          return false;
+        }
+
+        if (
+          object &&
+          isCleanObjectPhrase(object) &&
+          !relationshipMatchesObject(item, answerEvidence, object)
+        ) {
+          return false;
+        }
+
+        return true;
+      });
+
+    return {
+      claimId:
+        `claim-${index}-${predicate}`,
+      subject,
+      predicate,
+      object,
+      evidence: matched
+    };
+  });
+
+}
+
+/**
+ * Build the structured answer context from understanding + scoped evidence.
+ */
+export function buildStructuredAnswerContext(
+  understanding: QueryUnderstanding,
+  answerEvidence: Evidence[]
+): StructuredAnswerContext {
+
+  const scope =
+    deriveAnswerEvidenceScope(understanding);
+
+  const claimEvidence =
+    bindClaimEvidence(scope, answerEvidence);
+
+  return {
+    query: understanding.originalQuery,
+    intent: understanding.intent,
+    requestedClaims: scope.requestedClaims,
+    requestedSubjects: scope.focusSubjects,
+    requestedPredicates: scope.requestedPredicates,
+    scope,
+    answerEvidence,
+    claimEvidence,
+    provenance: answerEvidence.map(item => ({
+      entityId: item.entity.id,
+      source: item.entity.source,
+      ...(item.relationship
+        ? { relationshipType: item.relationship.type }
+        : {})
+    }))
+  };
 
 }

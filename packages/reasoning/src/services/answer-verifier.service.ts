@@ -38,6 +38,7 @@ import {
   buildPartialGroundedAnswer,
   buildRelationshipNotEstablishedAnswer,
   buildImplicationGroundedAnswer,
+  buildIdentityGroundedAnswer,
   detectUnsupportedCausalRemainder
 } from "../utils/build-partial-grounded-answer.js";
 
@@ -676,6 +677,65 @@ function safeRelationshipNotEstablishedResult(
     trace: buildTrace(
       {
         evidence: entityOnlyEvidence,
+        comparison: context.comparison
+      },
+      {
+        query: context.query,
+        context
+      }
+    ),
+
+    explanation,
+
+    ...(context.comparison !== undefined
+      ? { comparison: context.comparison }
+      : {})
+
+  };
+
+}
+
+/**
+ * Concise FACT identity replacement — never requires a graph path.
+ */
+function safeFactGroundedResult(
+  context: ReasoningContext
+): ReasoningResult {
+
+  const answer =
+    buildIdentityGroundedAnswer(context);
+
+  const explanation =
+    buildAnswerExplanation(answer, context);
+
+  return {
+
+    answer,
+
+    confidence: answer.trim().length > 0 ? 1 : 0,
+
+    ...(answer.trim().length === 0
+      ? {
+          confidenceLevel: "NONE" as const,
+          confidenceReasons: [
+            "FACT subject not represented in grounded evidence"
+          ]
+        }
+      : {
+          confidenceLevel: "HIGH" as const,
+          confidenceReasons: [
+            "FACT identity grounded without requiring a graph path"
+          ]
+        }),
+
+    citations: context.items.map(item => ({
+      entityId: item.entityId,
+      source: item.source
+    })),
+
+    trace: buildTrace(
+      {
+        evidence: context.evidence,
         comparison: context.comparison
       },
       {
@@ -1362,10 +1422,16 @@ implements AnswerVerifier {
         ...intentVerification.semantics.reasons
       );
 
+      const isFact =
+        context.understanding?.intent === "FACT" ||
+        intentVerification.semantics.intent === "FACT";
+
       const replacement =
-        intentVerification.semantics.status === "NOT_SUPPORTED"
-          ? safeRelationshipNotEstablishedResult(context)
-          : safePartialGroundedResult(context);
+        isFact
+          ? safeFactGroundedResult(context)
+          : intentVerification.semantics.status === "NOT_SUPPORTED"
+            ? safeRelationshipNotEstablishedResult(context)
+            : safePartialGroundedResult(context);
 
       return {
 
@@ -1373,7 +1439,12 @@ implements AnswerVerifier {
           withVerificationTrace(
             replacement,
             context,
-            intentVerification
+            intentVerification,
+            isFact
+              ? [
+                  `Verification: ${intentVerification.semantics.status} — FACT answer constrained to identity scope`
+                ]
+              : undefined
           ),
 
         report: {

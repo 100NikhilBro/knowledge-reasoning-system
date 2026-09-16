@@ -20,6 +20,10 @@ import type {
   SummarizationResult
 } from "../utils/execute-summarization.js";
 
+import type {
+  StructuredAnswerContext
+} from "../utils/select-answer-evidence.js";
+
 /**
  * Explicit projection of verified evidence used for grounded answer generation.
  * Internal to the reasoning package — not part of the public API contract.
@@ -85,6 +89,12 @@ export interface ReasoningContext {
    * Optional so tests/fixtures can omit it.
    */
   understanding?: QueryUnderstanding;
+
+  /**
+   * Query-scoped structured answer context (Prompt 5/5.1).
+   * Already filtered — do not re-merge raw retrieval evidence into this.
+   */
+  answerContext?: StructuredAnswerContext;
 
   /**
    * Ordered grounded items (highest-ranked first when synthesizer sorted).

@@ -19,6 +19,15 @@ import { DefaultConfidenceEngine } from "./confidence-engine.service.js";
 import { DefaultCitationBuilder } from "./citation-builder.service.js";
 import { DefaultAnswerGenerator } from "./answer-generator.service.js";
 
+import {
+  buildStructuredAnswerContext,
+  selectAnswerEvidence
+} from "../utils/select-answer-evidence.js";
+
+import {
+  understandQuery
+} from "../utils/query-understanding.js";
+
 /**
  * LLM-backed answer generator.
  *
@@ -46,6 +55,47 @@ export class LlmAnswerGenerator
   async generate(
     context: ReasoningContext
   ): Promise<ReasoningResult> {
+
+    if (!context.understanding && context.query) {
+      context.understanding =
+        understandQuery(context.query);
+    }
+
+    if (
+      !context.answerContext &&
+      context.understanding
+    ) {
+      const scoped =
+        selectAnswerEvidence(
+          context.understanding,
+          context.evidence
+        );
+
+      context.answerContext =
+        buildStructuredAnswerContext(
+          context.understanding,
+          scoped
+        );
+
+      context.evidence =
+        scoped;
+
+      context.items =
+        scoped.map(item => ({
+          entityId: item.entity.id,
+          entityType: item.entity.type,
+          label: item.entity.label,
+          source: item.entity.source,
+          confidence: item.entity.confidence,
+          score: item.score,
+          evidenceSource: item.source,
+          properties: item.entity.properties ?? {},
+          ...(item.relationship
+            ? { relationship: item.relationship }
+            : {}),
+          ...(item.path ? { path: item.path } : {})
+        }));
+    }
 
     const evidenceSet = {
       evidence: context.evidence,

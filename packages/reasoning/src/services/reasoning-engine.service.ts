@@ -72,7 +72,8 @@ import {
 } from "../utils/query-evidence-compatibility.js";
 
 import {
-  selectAnswerEvidence
+  selectAnswerEvidence,
+  buildStructuredAnswerContext
 } from "../utils/select-answer-evidence.js";
 
 import {
@@ -273,9 +274,19 @@ implements ReasoningEngine {
           compatibleEvidence
         );
 
+      const answerContext =
+        buildStructuredAnswerContext(
+          understanding,
+          answerEvidence
+        );
+
+      /*
+       * Never re-merge compatible/raw evidence after scoping.
+       * Generator and verifier receive only answerEvidence.
+       */
       const groundedEvidenceSet = {
         evidence:
-          answerEvidence,
+          answerContext.answerEvidence,
         ...(synthesized.comparison !== undefined
           ? { comparison: synthesized.comparison }
           : {})
@@ -299,6 +310,9 @@ implements ReasoningEngine {
 
       context.understanding =
         understanding;
+
+      context.answerContext =
+        answerContext;
 
       /*
        * Step 5b (P6)

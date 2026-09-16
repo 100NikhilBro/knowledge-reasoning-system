@@ -168,11 +168,15 @@ export type {
 export {
   deriveAnswerEvidenceScope,
   selectAnswerEvidence,
-  isPredicateInAnswerScope
+  isPredicateInAnswerScope,
+  bindClaimEvidence,
+  buildStructuredAnswerContext
 } from "./utils/select-answer-evidence.js";
 
 export type {
-  AnswerEvidenceScope
+  AnswerEvidenceScope,
+  ClaimEvidence,
+  StructuredAnswerContext
 } from "./utils/select-answer-evidence.js";
 
 export {

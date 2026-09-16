@@ -40,6 +40,11 @@ import {
   buildPartialGroundedAnswer
 } from "../utils/build-partial-grounded-answer.js";
 
+import {
+  buildStructuredAnswerContext,
+  selectAnswerEvidence
+} from "../utils/select-answer-evidence.js";
+
 /**
  * Deterministic / template-based answer generator.
  * Answers are produced only from the supplied grounded ReasoningContext.
@@ -105,6 +110,46 @@ implements AnswerGenerator {
         : {})
 
     };
+
+    if (
+      !context.answerContext &&
+      context.understanding
+    ) {
+      const scoped =
+        selectAnswerEvidence(
+          context.understanding,
+          context.evidence
+        );
+
+      context.answerContext =
+        buildStructuredAnswerContext(
+          context.understanding,
+          scoped
+        );
+
+      /*
+       * Keep generator evidence aligned with structured answer scope —
+       * never reintroduce broader candidate evidence here.
+       */
+      context.evidence =
+        scoped;
+
+      context.items =
+        scoped.map(item => ({
+          entityId: item.entity.id,
+          entityType: item.entity.type,
+          label: item.entity.label,
+          source: item.entity.source,
+          confidence: item.entity.confidence,
+          score: item.score,
+          evidenceSource: item.source,
+          properties: item.entity.properties ?? {},
+          ...(item.relationship
+            ? { relationship: item.relationship }
+            : {}),
+          ...(item.path ? { path: item.path } : {})
+        }));
+    }
 
     const natural =
       context.comparison ??

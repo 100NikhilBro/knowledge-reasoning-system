@@ -31,7 +31,8 @@ import {
 } from "./render-comparison.js";
 
 import {
-  detectRelationshipBetweenQuery
+  detectRelationshipBetweenQuery,
+  entityMatchesPhrase
 } from "./detect-relationship-between-query.js";
 
 import {
@@ -906,6 +907,71 @@ export function verifyAnswerAgainstIntent(
 
   let status: AnswerSupportStatus =
     "SUPPORTED";
+
+  /*
+   * FACT identity: do not apply relationship/path verification rules.
+   * Accept concise entity identity when the requested subject is represented
+   * and the answer stays inside FACT scope.
+   */
+  if (understanding.intent === "FACT") {
+
+    const identityMatch =
+      context.query?.match(
+        /^\s*what\s+(?:is|are)\s+(.+?)\s*\??\s*$/i
+      );
+
+    const subjects =
+      understanding.entities.length > 0
+        ? understanding.entities
+        : (
+            identityMatch?.[1]
+              ? [identityMatch[1].trim().replace(/[?"'.]+$/g, "")]
+              : []
+          );
+
+    const subjectPresent =
+      subjects.length === 0 ||
+      subjects.some(subject =>
+        context.evidence.some(item =>
+          entityMatchesPhrase(item.entity, subject)
+        ) ||
+        context.items.some(item =>
+          entityMatchesPhrase(
+            {
+              id: item.entityId,
+              label: item.label,
+              source: item.source,
+              properties: item.properties
+            },
+            subject
+          )
+        ) ||
+        mentionsPhrase(answer, subject)
+      );
+
+    if (!subjectPresent && answer.trim().length > 0) {
+      status = "NOT_SUPPORTED";
+      matchesIntent = false;
+      reasons.push(
+        "FACT answer does not represent the requested entity"
+      );
+      traceLines.push(
+        "Verification: FACT subject missing"
+      );
+    } else {
+      status = "SUPPORTED";
+      matchesIntent = true;
+      claims.push({
+        subject: subjects[0],
+        predicate: "FACT",
+        status: "SUPPORTED"
+      });
+      traceLines.push(
+        "Verification: FACT identity supported without requiring a graph path"
+      );
+    }
+
+  }
 
   /*
    * P1 implication status is authoritative for IMPLICATION intents.
@@ -1790,7 +1856,12 @@ export function verifyAnswerAgainstIntent(
       deriveAnswerEvidenceScope(understanding);
 
     const spillover =
-      detectAnswerScopeSpillover(answer, scope, understanding);
+      detectAnswerScopeSpillover(
+        answer,
+        scope,
+        understanding,
+        context
+      );
 
     if (spillover.length > 0) {
       exceedsEvidence = true;
@@ -1854,7 +1925,8 @@ export function verifyAnswerAgainstIntent(
 function detectAnswerScopeSpillover(
   answer: string,
   scope: ReturnType<typeof deriveAnswerEvidenceScope>,
-  understanding: QueryUnderstanding
+  understanding: QueryUnderstanding,
+  context: ReasoningContext
 ): string[] {
 
   const issues: string[] = [];
@@ -1892,7 +1964,8 @@ function detectAnswerScopeSpillover(
   }
 
   /*
-   * Foreign PEP spillover: answer names a PEP that is not a focus subject.
+   * Foreign subject spillover for path/bridge/connected answers as well —
+   * naming another PEP (or focus subject) is out of scope even when true.
    */
   const answerPeps =
     answer.match(/\bPEP[\s_-]?(\d+)\b/gi) ?? [];
@@ -1912,7 +1985,8 @@ function detectAnswerScopeSpillover(
       scope.mode === "fact" ||
       scope.mode === "focused_relationship" ||
       scope.mode === "implication" ||
-      scope.mode === "compound"
+      scope.mode === "compound" ||
+      scope.mode === "path"
     )
   ) {
     for (const match of answerPeps) {
@@ -1921,6 +1995,67 @@ function detectAnswerScopeSpillover(
 
       if (digits && !focusPeps.has(digits)) {
         issues.push(`foreign subject PEP-${digits}`);
+      }
+    }
+  }
+
+  /*
+   * Generic foreign-subject prose: sentence subjects before ontology verbs
+   * must resolve to a requested focus subject or an in-scope evidence label.
+   */
+  if (
+    scope.focusSubjects.length > 0 &&
+    (
+      scope.mode === "focused_relationship" ||
+      scope.mode === "implication" ||
+      scope.mode === "compound" ||
+      scope.mode === "path"
+    )
+  ) {
+    const allowedPhrases =
+      uniqueLower([
+        ...scope.focusSubjects,
+        ...scope.focusObjects,
+        ...context.items.map(item => item.label),
+        ...context.evidence.map(item => item.entity.label),
+        ...context.items.map(item => codedTopicFromItem(item)),
+        ...context.evidence.map(item =>
+          codedTopicFromEntity(item.entity)
+        )
+      ]);
+
+    for (const sentence of answer.split(/[.!?]+/)) {
+      const match =
+        sentence.match(
+          /^\s*(.+?)\s+(?:introduced|introduces|addresses|addressed|was proposed by|proposed by|resulted in|results in|implemented in)\b/i
+        );
+
+      if (!match?.[1]) {
+        continue;
+      }
+
+      const left =
+        match[1].trim();
+
+      if (
+        !left ||
+        /^(?:it|this|that|they|he|she)\b/i.test(left)
+      ) {
+        continue;
+      }
+
+      const normalized =
+        left.toLowerCase();
+
+      const inScope =
+        allowedPhrases.some(phrase =>
+          normalized === phrase ||
+          normalized.includes(phrase) ||
+          phrase.includes(normalized)
+        );
+
+      if (!inScope) {
+        issues.push(`foreign subject ${left}`);
       }
     }
   }
@@ -1945,9 +2080,76 @@ function detectAnswerScopeSpillover(
     }
   }
 
-  void understanding;
-
   return [...new Set(issues)];
+
+}
+
+function codedTopicFromItem(
+  item: {
+    entityId: string;
+    properties?: Record<string, unknown>;
+  }
+): string | undefined {
+
+  const pep =
+    item.properties?.pep ??
+    item.properties?.PEP;
+
+  if (
+    typeof pep === "string" ||
+    typeof pep === "number"
+  ) {
+    return `pep-${pep}`;
+  }
+
+  const idTail =
+    item.entityId.includes(":")
+      ? item.entityId.slice(item.entityId.indexOf(":") + 1)
+      : item.entityId;
+
+  if (/^pep-\d+/i.test(idTail)) {
+    return idTail.toLowerCase();
+  }
+
+  return undefined;
+
+}
+
+function codedTopicFromEntity(
+  entity: {
+    id: string;
+    properties?: Record<string, unknown>;
+  }
+): string | undefined {
+
+  return codedTopicFromItem({
+    entityId: entity.id,
+    properties: entity.properties
+  });
+
+}
+
+function uniqueLower(
+  values: Array<string | undefined>
+): string[] {
+
+  const seen =
+    new Set<string>();
+  const out: string[] = [];
+
+  for (const value of values) {
+    const trimmed =
+      value?.trim().toLowerCase();
+
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+
+  return out;
 
 }
 

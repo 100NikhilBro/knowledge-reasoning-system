@@ -324,6 +324,13 @@ export function calibrateAnswerConfidence(
     );
   }
 
+  if (path?.kind === "FACT_IDENTITY") {
+    pushUnique(
+      reasons,
+      "FACT identity does not require a graph path"
+    );
+  }
+
   if (intent) {
     pushUnique(reasons, `query intent matched evidence (${intent})`);
   }

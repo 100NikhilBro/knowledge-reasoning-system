@@ -48,6 +48,7 @@ export type PathInterpretationKind =
   | "BRIDGE"
   | "MULTI_HOP"
   | "COMPARISON_EVIDENCE"
+  | "FACT_IDENTITY"
   | "INSUFFICIENT";
 
 export interface PathInterpretation {
@@ -545,6 +546,27 @@ export function interpretEvidencePaths(
         subjects.length > 0
           ? `Comparison evidence for subjects [${subjects.join(", ")}] is not a graph path.`
           : "Comparison evidence is not a graph path."
+    };
+  }
+
+  /*
+   * FACT identity asks do not require a graph path / relationship topology.
+   */
+  if (intent === "FACT") {
+    const subject =
+      resolved?.entities[0];
+
+    return {
+      kind: "FACT_IDENTITY",
+      sourceEntity: subject,
+      bridgeEntities: [],
+      relationships: [],
+      hopCount: 0,
+      supportsClaim: true,
+      explanation:
+        subject
+          ? `FACT identity answer for ${subject} does not require a graph path.`
+          : "FACT identity answer does not require a graph path."
     };
   }
 
