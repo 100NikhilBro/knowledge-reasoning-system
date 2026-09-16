@@ -26,12 +26,17 @@ import {
   relationshipTypesForDimensions
 } from "./detect-comparison-request.js";
 
+import {
+  detectMultiHopPathQuery
+} from "./detect-focus-relationships.js";
+
 /**
  * Structured answer-relevant evidence scope derived from query semantics.
  * Retrieval candidates may be broader; answer context must respect this scope.
  */
 export interface AnswerEvidenceScope {
   intent: QueryIntentKind;
+  originalQuery: string;
   focusSubjects: string[];
   focusObjects: string[];
   requestedPredicates: string[];
@@ -156,6 +161,7 @@ export function deriveAnswerEvidenceScope(
 
   return {
     intent: understanding.intent,
+    originalQuery: understanding.originalQuery,
     focusSubjects,
     focusObjects,
     requestedPredicates,
@@ -293,10 +299,42 @@ export function selectAnswerEvidence(
         selectClaimEvidence(scope, evidence);
       break;
     case "focused_relationship":
-    default:
+    default: {
+      const typed =
+        understanding.requireTypedEdge;
+
+      /*
+       * Exact S-P-O narrowing only for clean typed-edge asks
+       * ("Does A introduce X?"). Compound RELATIONSHIP parses that bleed
+       * "and …" into the object must keep multi-predicate claim scope.
+       */
+      const exactTyped =
+        Boolean(
+          typed &&
+          typeof typed.object === "string" &&
+          isCleanObjectPhrase(typed.object) &&
+          (
+            scope.requestedPredicates.length <= 1 ||
+            scope.requestedPredicates.every(
+              predicate => predicate === typed.predicate
+            )
+          )
+        );
+
       selected =
-        selectFocusedRelationshipEvidence(scope, evidence);
+        selectFocusedRelationshipEvidence(
+          exactTyped && typed
+            ? {
+                ...scope,
+                focusSubjects: [typed.subject],
+                focusObjects: [typed.object],
+                requestedPredicates: [typed.predicate]
+              }
+            : scope,
+          evidence
+        );
       break;
+    }
   }
 
   /*
@@ -516,29 +554,43 @@ function selectPathEvidence(
   const between =
     scope.relationshipBetween;
 
-  const endpointPhrases =
-    uniquePhrases([
-      ...(between
-        ? [between.left, between.right]
-        : scope.focusSubjects),
-      ...(between?.bridge
-        ? [between.bridge]
-        : []),
-      ...(scope.bridgeEntity
-        ? [scope.bridgeEntity]
-        : []),
-      ...scope.focusObjects
-    ]);
+  const bridgePhrase =
+    between?.bridge ??
+    scope.bridgeEntity;
+
+  const leftPhrase =
+    between?.left;
+
+  const rightPhrase =
+    between?.right;
+
+  const openExploration =
+    isOpenExplorationScope(
+      leftPhrase,
+      rightPhrase,
+      bridgePhrase,
+      scope.focusSubjects,
+      scope.originalQuery
+    );
 
   /*
-   * Open multi-hop / related-entity asks name one focus subject without an
-   * explicit second endpoint. Keep that subject's relationship neighborhood
-   * (all predicates) rather than dropping every spoke.
+   * Open multi-hop / related-entity exploration: subject neighborhood only.
+   * Recover subjects from query text when understanding left entities empty
+   * (e.g. non-PEP labels in "X and its related entities …").
    */
-  if (endpointPhrases.length < 2) {
+  if (openExploration) {
+    const subjects =
+      scope.focusSubjects.length > 0
+        ? scope.focusSubjects
+        : recoverSubjectPhrasesFromQuery(
+            scope.originalQuery,
+            evidence
+          );
+
     return selectFocusedRelationshipEvidence(
       {
         ...scope,
+        focusSubjects: subjects,
         requestedPredicates: [],
         focusObjects: []
       },
@@ -546,40 +598,295 @@ function selectPathEvidence(
     );
   }
 
-  const endpointIds =
-    resolvePhraseIds(evidence, endpointPhrases);
+  if (!leftPhrase || !rightPhrase) {
+    return selectFocusedRelationshipEvidence(scope, evidence);
+  }
 
-  const retained: Evidence[] = [];
+  const leftIds =
+    resolvePhraseIds(evidence, [leftPhrase]);
+  const rightIds =
+    resolvePhraseIds(evidence, [rightPhrase]);
+  const bridgeIds =
+    bridgePhrase
+      ? resolvePhraseIds(evidence, [bridgePhrase])
+      : new Set<string>();
+
+  /*
+   * Explicit bridge through X: only A—X and B—X spokes.
+   */
+  if (bridgePhrase && bridgeIds.size > 0) {
+    const spokes =
+      evidence.filter(item => {
+        if (!item.relationship) {
+          return (
+            leftIds.has(item.entity.id) ||
+            rightIds.has(item.entity.id) ||
+            bridgeIds.has(item.entity.id)
+          );
+        }
+
+        return isBridgeSpoke(
+          item.relationship,
+          leftIds,
+          rightIds,
+          bridgeIds
+        );
+      });
+
+    return attachEndpoints(spokes, evidence);
+  }
+
+  /*
+   * Closed connected/direct between A and B:
+   * 1) prefer exact edges with both endpoints in {A,B}
+   * 2) otherwise keep only shared-hub spokes A—H / B—H
+   */
+  const direct =
+    evidence.filter(item => {
+      if (!item.relationship) {
+        return (
+          leftIds.has(item.entity.id) ||
+          rightIds.has(item.entity.id)
+        );
+      }
+
+      return isDirectBetween(
+        item.relationship,
+        leftIds,
+        rightIds
+      );
+    });
+
+  if (direct.some(item => item.relationship)) {
+    return attachEndpoints(direct, evidence);
+  }
+
+  const hubIds =
+    findSharedHubIds(evidence, leftIds, rightIds);
+
+  if (hubIds.size === 0) {
+    return attachEndpoints(
+      evidence.filter(item =>
+        !item.relationship &&
+        (
+          leftIds.has(item.entity.id) ||
+          rightIds.has(item.entity.id)
+        )
+      ),
+      evidence
+    );
+  }
+
+  const spokes =
+    evidence.filter(item => {
+      if (!item.relationship) {
+        return (
+          leftIds.has(item.entity.id) ||
+          rightIds.has(item.entity.id) ||
+          hubIds.has(item.entity.id)
+        );
+      }
+
+      return isBridgeSpoke(
+        item.relationship,
+        leftIds,
+        rightIds,
+        hubIds
+      );
+    });
+
+  return attachEndpoints(spokes, evidence);
+
+}
+
+function isOpenExplorationScope(
+  leftPhrase: string | undefined,
+  rightPhrase: string | undefined,
+  bridgePhrase: string | undefined,
+  focusSubjects: string[],
+  originalQuery = ""
+): boolean {
+
+  if (leftPhrase && rightPhrase) {
+    return false;
+  }
+
+  if (bridgePhrase) {
+    return false;
+  }
+
+  if (focusSubjects.length >= 2) {
+    return false;
+  }
+
+  /*
+   * Broader neighborhood only for explicit exploration / multi-hop discovery.
+   */
+  return detectMultiHopPathQuery(originalQuery);
+
+}
+
+/**
+ * Recover focus subject phrases mentioned in the query from evidence labels.
+ * Prefer the earliest mention; skip generic stop tokens.
+ */
+function recoverSubjectPhrasesFromQuery(
+  query: string,
+  evidence: Evidence[]
+): string[] {
+
+  const lower =
+    query.toLowerCase();
+
+  const candidates: Array<{ phrase: string; index: number }> = [];
+  const seen =
+    new Set<string>();
 
   for (const item of evidence) {
-    if (!item.relationship) {
+    const phrases =
+      uniquePhrases([
+        item.entity.label,
+        typeof item.entity.properties?.pep === "string"
+          ? `PEP-${item.entity.properties.pep}`
+          : undefined,
+        item.entity.id.includes(":")
+          ? item.entity.id.split(":").slice(1).join(":")
+          : item.entity.id
+      ]);
+
+    for (const phrase of phrases) {
+      const key =
+        phrase.toLowerCase();
+
       if (
-        endpointPhrases.some(phrase =>
-          entityMatchesPhrase(item.entity, phrase)
-        )
+        seen.has(key) ||
+        key.length < 2 ||
+        /^(?:feature|proposal|author|concern|decision|entity|typing)$/i
+          .test(phrase)
       ) {
-        retained.push(item);
+        continue;
       }
-      continue;
-    }
 
-    const fromIn =
-      endpointIds.has(item.relationship.from);
-    const toIn =
-      endpointIds.has(item.relationship.to);
+      const index =
+        lower.indexOf(key);
 
-    /*
-     * Bridge/connected answer context: only edges whose both endpoints
-     * are among the requested path participants (A, B, and optional X).
-     * Do not re-expand via incidental path provenance — that reintroduces
-     * unrelated neighborhood edges (proposers, decisions, etc.).
-     */
-    if (fromIn && toIn) {
-      retained.push(item);
+      if (index < 0) {
+        continue;
+      }
+
+      seen.add(key);
+      candidates.push({ phrase, index });
     }
   }
 
-  return attachEndpoints(retained, evidence);
+  candidates.sort((a, b) => a.index - b.index);
+
+  /*
+   * Open exploration is subject-neighborhood: keep the primary (earliest) subject.
+   */
+  return candidates.length > 0
+    ? [candidates[0].phrase]
+    : [];
+
+}
+
+function isDirectBetween(
+  relationship: { from: string; to: string },
+  leftIds: Set<string>,
+  rightIds: Set<string>
+): boolean {
+
+  return (
+    (
+      leftIds.has(relationship.from) &&
+      rightIds.has(relationship.to)
+    ) ||
+    (
+      rightIds.has(relationship.from) &&
+      leftIds.has(relationship.to)
+    )
+  );
+
+}
+
+function isBridgeSpoke(
+  relationship: { from: string; to: string },
+  leftIds: Set<string>,
+  rightIds: Set<string>,
+  hubIds: Set<string>
+): boolean {
+
+  const fromHub =
+    hubIds.has(relationship.from);
+  const toHub =
+    hubIds.has(relationship.to);
+  const fromLeft =
+    leftIds.has(relationship.from);
+  const toLeft =
+    leftIds.has(relationship.to);
+  const fromRight =
+    rightIds.has(relationship.from);
+  const toRight =
+    rightIds.has(relationship.to);
+
+  const leftSpoke =
+    (fromLeft && toHub) ||
+    (fromHub && toLeft);
+
+  const rightSpoke =
+    (fromRight && toHub) ||
+    (fromHub && toRight);
+
+  return leftSpoke || rightSpoke;
+
+}
+
+function findSharedHubIds(
+  evidence: Evidence[],
+  leftIds: Set<string>,
+  rightIds: Set<string>
+): Set<string> {
+
+  const leftNeighbors =
+    new Set<string>();
+  const rightNeighbors =
+    new Set<string>();
+
+  for (const item of evidence) {
+    if (!item.relationship) {
+      continue;
+    }
+
+    const { from, to } =
+      item.relationship;
+
+    if (leftIds.has(from)) {
+      leftNeighbors.add(to);
+    }
+
+    if (leftIds.has(to)) {
+      leftNeighbors.add(from);
+    }
+
+    if (rightIds.has(from)) {
+      rightNeighbors.add(to);
+    }
+
+    if (rightIds.has(to)) {
+      rightNeighbors.add(from);
+    }
+  }
+
+  const hubs =
+    new Set<string>();
+
+  for (const id of leftNeighbors) {
+    if (rightNeighbors.has(id)) {
+      hubs.add(id);
+    }
+  }
+
+  return hubs;
 
 }
 
@@ -814,12 +1121,6 @@ function attachEndpoints(
       ids.add(item.relationship.from);
       ids.add(item.relationship.to);
     }
-
-    if (item.path?.nodes) {
-      for (const node of item.path.nodes) {
-        ids.add(node.id);
-      }
-    }
   }
 
   const out =
@@ -880,6 +1181,44 @@ function resolvePhraseIds(
       )
     ) {
       ids.add(item.entity.id);
+    }
+
+    if (!item.relationship) {
+      continue;
+    }
+
+    const from =
+      findEntity(evidence, item.relationship.from) ??
+      {
+        id: item.relationship.from,
+        label: item.relationship.from,
+        source: "",
+        properties: {}
+      };
+
+    const to =
+      findEntity(evidence, item.relationship.to) ??
+      {
+        id: item.relationship.to,
+        label: item.relationship.to,
+        source: "",
+        properties: {}
+      };
+
+    if (
+      phrases.some(phrase =>
+        entityMatchesPhrase(from, phrase)
+      )
+    ) {
+      ids.add(item.relationship.from);
+    }
+
+    if (
+      phrases.some(phrase =>
+        entityMatchesPhrase(to, phrase)
+      )
+    ) {
+      ids.add(item.relationship.to);
     }
   }
 

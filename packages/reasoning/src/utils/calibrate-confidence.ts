@@ -331,6 +331,13 @@ export function calibrateAnswerConfidence(
     );
   }
 
+  if (path?.kind === "CLAIM_SET") {
+    pushUnique(
+      reasons,
+      "answer uses independent claim evidence (not a graph path)"
+    );
+  }
+
   if (intent) {
     pushUnique(reasons, `query intent matched evidence (${intent})`);
   }

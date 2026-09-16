@@ -22,7 +22,7 @@ const ATTRIBUTION_CHECKS: Array<{
   {
     type: "INTRODUCES",
     pattern:
-      /\b([A-Za-z][\w\s-]{0,60}?)\s+introduced?\s+([A-Za-z][\w\s-]{0,60}?)(?:\.|,|;|$)/gi
+      /\b([A-Za-z][\w\s-]{0,60}?)\s+(?:introduces|introduced|introduce)\s+([A-Za-z][\w\s-]{0,60}?)(?:\.|,|;|$)/gi
   },
   {
     type: "PROPOSED_BY",

@@ -140,6 +140,14 @@ function resolveVerificationStatus(
     return "PARTIALLY_SUPPORTED";
   }
 
+  if (
+    extraReasons.some(reason =>
+      /attribution mismatch|exceeded evidence|NOT_SUPPORTED/i.test(reason)
+    )
+  ) {
+    return "NOT_SUPPORTED";
+  }
+
   /*
    * Recognize analytical accept/constrain success before the NOT_SUPPORTED
    * substring check so constrained SUPPORTED replacements calibrate correctly.
@@ -380,11 +388,13 @@ function withVerificationTrace(
 
   const meta = {
     ...(enrichedTrace.meta ?? {}),
-    ...(verification
-      ? { verificationStatus: verification.semantics.status }
-      : forceNone
-        ? { verificationStatus: "NOT_SUPPORTED" }
-        : {}),
+    verificationStatus:
+      resolveVerificationStatus(
+        verification,
+        extraReasons,
+        forceNone
+      ) ??
+      (forceNone ? "NOT_SUPPORTED" : undefined),
     ...(verification
       ? {
           claimSupport: {
@@ -1600,6 +1610,30 @@ implements AnswerVerifier {
         "Relationship attribution does not match grounded edge direction; replaced with grounded partial answer"
       );
 
+      const attributionFailure: AnswerIntentVerification = {
+        matchesIntent: false,
+        exceedsEvidence: true,
+        semantics: {
+          intent:
+            intentVerification.semantics.intent,
+          status: "NOT_SUPPORTED",
+          claims: intentVerification.semantics.claims,
+          implicationSupport:
+            intentVerification.semantics.implicationSupport,
+          reasons: [
+            ...intentVerification.semantics.reasons,
+            "relationship attribution mismatch"
+          ]
+        },
+        traceLines: [
+          ...intentVerification.traceLines.filter(line =>
+            !/SUPPORTED/i.test(line) ||
+            /NOT_SUPPORTED|PARTIALLY_SUPPORTED/i.test(line)
+          ),
+          "Verification: relationship attribution mismatch"
+        ]
+      };
+
       return {
 
         result:
@@ -1608,9 +1642,9 @@ implements AnswerVerifier {
               context
             ),
             context,
-            intentVerification,
+            attributionFailure,
             [
-              "Verification: relationship attribution mismatch"
+              "Verification: NOT_SUPPORTED — relationship attribution mismatch"
             ]
           ),
 

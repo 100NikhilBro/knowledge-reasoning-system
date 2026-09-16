@@ -48,6 +48,7 @@ export type PathInterpretationKind =
   | "BRIDGE"
   | "MULTI_HOP"
   | "COMPARISON_EVIDENCE"
+  | "CLAIM_SET"
   | "FACT_IDENTITY"
   | "INSUFFICIENT";
 
@@ -571,6 +572,27 @@ export function interpretEvidencePaths(
   }
 
   /*
+   * Compound / implication claim sets are independent typed edges — not a
+   * fabricated multi-hop graph path.
+   */
+  if (
+    intent === "COMPOUND" ||
+    intent === "IMPLICATION"
+  ) {
+    return {
+      kind: "CLAIM_SET",
+      bridgeEntities: [],
+      relationships: relationshipTypes,
+      hopCount: 0,
+      supportsClaim: relationshipTypes.length > 0,
+      explanation:
+        relationshipTypes.length > 0
+          ? `Independent claim evidence: ${relationshipTypes.join(", ")}.`
+          : "No independent claim evidence present."
+    };
+  }
+
+  /*
    * Exact subject-predicate-object(+direction) relationship claims.
    */
   if (typedEdge && !between) {
@@ -706,6 +728,28 @@ export function interpretEvidencePaths(
         supportsClaim: false,
         explanation:
           "No relational path request and no attested relationships in evidence."
+      };
+    }
+
+    /*
+     * Multiple independent typed focuses (without a path ask) are a claim
+     * set — not MULTI_HOP topology.
+     */
+    if (
+      relationships.length > 1 &&
+      (
+        (resolved?.focusRelationships?.length ?? 0) > 1 ||
+        (resolved?.claims?.length ?? 0) > 1
+      )
+    ) {
+      return {
+        kind: "CLAIM_SET",
+        bridgeEntities: [],
+        relationships: relationshipTypes,
+        hopCount: 0,
+        supportsClaim: true,
+        explanation:
+          `Independent claim evidence: ${relationshipTypes.join(", ")}.`
       };
     }
 
