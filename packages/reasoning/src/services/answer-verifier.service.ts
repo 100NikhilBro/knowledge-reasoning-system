@@ -127,20 +127,26 @@ function resolveVerificationStatus(
     return "PARTIALLY_SUPPORTED";
   }
 
+  /*
+   * Recognize analytical accept/constrain success before the NOT_SUPPORTED
+   * substring check so constrained SUPPORTED replacements calibrate correctly.
+   */
+  if (
+    extraReasons.some(reason =>
+      /Verification:\s*SUPPORTED\b/i.test(reason) ||
+      /SUPPORTED — (?:answer accepted|analytical answer (?:accepted|constrained))/i
+        .test(reason)
+    )
+  ) {
+    return "SUPPORTED";
+  }
+
   if (
     extraReasons.some(reason =>
       /NOT_SUPPORTED/i.test(reason)
     )
   ) {
     return "NOT_SUPPORTED";
-  }
-
-  if (
-    extraReasons.some(reason =>
-      /SUPPORTED — answer accepted/i.test(reason)
-    )
-  ) {
-    return "SUPPORTED";
   }
 
   if (forceNone) {
@@ -1072,6 +1078,10 @@ implements AnswerVerifier {
             context
           );
 
+        const constrainedSupported =
+          replacementVerification.semantics.status === "SUPPORTED" &&
+          context.analyticalResult?.status === "SUPPORTED";
+
         return {
 
           result:
@@ -1102,7 +1112,14 @@ implements AnswerVerifier {
 
             rejectedCitations: [],
 
-            reasons
+            /*
+             * Do not surface stale generator contradiction reasons once the
+             * deterministic AnalyticalResult replacement verifies as SUPPORTED.
+             */
+            reasons:
+              constrainedSupported
+                ? []
+                : reasons
 
           }
 

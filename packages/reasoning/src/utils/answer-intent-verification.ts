@@ -101,47 +101,163 @@ function answerBoundsUnsupported(
 
 }
 
+const COUNT_WORDS: Record<string, number> = {
+  zero: 0,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10
+};
+
 /**
  * Strip PEP identifiers before extracting numeric count candidates so
- * PEP-484 / proposal:PEP-526 are never treated as analytical counts.
+ * PEP-484 / proposal:PEP-526 / proposal\:PEP-604 are never treated as counts.
  */
 function stripPepIdentifiers(
   answer: string
 ): string {
 
   return answer
-    .replace(/\bproposal:PEP[\s_-]?\d+\b/gi, " ")
+    .replace(/\bproposal\\?:PEP[\s_-]?\d+\b/gi, " ")
     .replace(/\bPEP[\s_-]?\d+\b/gi, " ");
 
 }
 
-function extractCountCandidates(
-  answer: string
+/**
+ * PEP numbers present in the structured analytical entity sets.
+ * Bare "(484)" list references must not be treated as analytical counts.
+ */
+function analyticalPepNumbers(
+  analytical: AnalyticalResult
+): Set<number> {
+
+  const numbers =
+    new Set<number>();
+
+  const ids =
+    [
+      ...analytical.deduplicatedEntityIds,
+      ...analytical.matchedEntities.map(item => item.entityId),
+      ...(analytical.nonMatchingEntities ?? []).map(item => item.entityId),
+      ...(analytical.universeEntityIds ?? [])
+    ];
+
+  for (const id of ids) {
+    for (const match of id.matchAll(/PEP[\s_-]?(\d+)/gi)) {
+      const value =
+        Number(match[1]);
+
+      if (Number.isFinite(value)) {
+        numbers.add(value);
+      }
+    }
+  }
+
+  return numbers;
+
+}
+
+function stripAnalyticalPepNumbers(
+  text: string,
+  analytical: AnalyticalResult
+): string {
+
+  let cleaned =
+    text;
+
+  for (const value of analyticalPepNumbers(analytical)) {
+    cleaned =
+      cleaned.replace(
+        new RegExp(`\\b${value}\\b`, "g"),
+        " "
+      );
+  }
+
+  return cleaned;
+
+}
+
+/**
+ * Explicit count claims only ("there are 4", "4 PEPs", "count: 4", "four PEPs").
+ * Ambient digits that merely identify PEPs are ignored.
+ */
+function extractExplicitCountClaims(
+  answer: string,
+  analytical: AnalyticalResult
 ): number[] {
 
   const cleaned =
+    stripAnalyticalPepNumbers(
+      stripPepIdentifiers(answer),
+      analytical
+    );
+
+  const claims: number[] = [];
+
+  const patterns =
+    [
+      /\b(?:count|total|number)\b[^.\n]{0,48}?\b(\d+)\b/gi,
+      /\bthere (?:are|were)\s+(\d+)\b/gi,
+      /\b(\d+)\s+peps?\b/gi,
+      /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\s+peps?\b/gi
+    ];
+
+  for (const pattern of patterns) {
+    for (const match of cleaned.matchAll(pattern)) {
+      const raw =
+        match[1];
+
+      if (!raw) {
+        continue;
+      }
+
+      const asWord =
+        COUNT_WORDS[raw.toLowerCase()];
+
+      const value =
+        asWord !== undefined
+          ? asWord
+          : Number(raw);
+
+      if (Number.isFinite(value)) {
+        claims.push(value);
+      }
+    }
+  }
+
+  return claims;
+
+}
+
+/**
+ * Legacy ambient count candidates. Matched-entity PEP numbers are removed so
+ * list answers like "Type Hints (484), …" do not invent a false count.
+ */
+function extractCountCandidates(
+  answer: string,
+  analytical?: AnalyticalResult
+): number[] {
+
+  let cleaned =
     stripPepIdentifiers(answer);
+
+  if (analytical) {
+    cleaned =
+      stripAnalyticalPepNumbers(cleaned, analytical);
+  }
 
   const digits =
     [...cleaned.matchAll(/\b(\d+)\b/g)]
       .map(match => Number(match[1]))
       .filter(value => Number.isFinite(value));
 
-  const words: Record<string, number> = {
-    zero: 0,
-    one: 1,
-    two: 2,
-    three: 3,
-    four: 4,
-    five: 5,
-    six: 6,
-    seven: 7,
-    eight: 8,
-    nine: 9,
-    ten: 10
-  };
-
-  for (const [word, value] of Object.entries(words)) {
+  for (const [word, value] of Object.entries(COUNT_WORDS)) {
     if (new RegExp(`\\b${word}\\b`, "i").test(cleaned)) {
       digits.push(value);
     }
@@ -151,12 +267,75 @@ function extractCountCandidates(
 
 }
 
+function canonicalizePepId(
+  value: string
+): string {
+
+  const match =
+    value.match(/PEP[\s_-]?(\d+)/i);
+
+  if (match?.[1]) {
+    return `pep-${match[1]}`;
+  }
+
+  return value.toLowerCase().replace(/[\s_\\:]+/g, "");
+
+}
+
 function extractMentionedPeps(
-  answer: string
+  answer: string,
+  analytical?: AnalyticalResult
 ): string[] {
 
-  return [...answer.matchAll(/\bPEP[\s_-]?(\d+)\b/gi)]
-    .map(match => `PEP-${match[1]}`);
+  const mentioned =
+    new Set<string>();
+
+  for (const match of answer.matchAll(/\bproposal\\?:PEP[\s_-]?(\d+)\b/gi)) {
+    mentioned.add(`PEP-${match[1]}`);
+  }
+
+  for (const match of answer.matchAll(/\bPEP[\s_-]?(\d+)\b/gi)) {
+    mentioned.add(`PEP-${match[1]}`);
+  }
+
+  if (analytical) {
+    const withoutPrefixed =
+      stripPepIdentifiers(answer);
+
+    for (const value of analyticalPepNumbers(analytical)) {
+      if (new RegExp(`\\b${value}\\b`).test(withoutPrefixed)) {
+        mentioned.add(`PEP-${value}`);
+      }
+    }
+  }
+
+  return [...mentioned];
+
+}
+
+function analyticalEntityPepIds(
+  analytical: AnalyticalResult,
+  source: "matched" | "allowed"
+): Set<string> {
+
+  const ids =
+    source === "matched"
+      ? [
+          ...analytical.deduplicatedEntityIds,
+          ...analytical.matchedEntities.map(item => item.entityId)
+        ]
+      : [
+          ...analytical.deduplicatedEntityIds,
+          ...analytical.matchedEntities.map(item => item.entityId),
+          ...(analytical.nonMatchingEntities ?? []).map(item => item.entityId),
+          ...(analytical.universeEntityIds ?? [])
+        ];
+
+  return new Set(
+    ids
+      .map(canonicalizePepId)
+      .filter(id => id.startsWith("pep-"))
+  );
 
 }
 
@@ -166,18 +345,38 @@ function pepAllowedByAnalytical(
 ): boolean {
 
   const compactPep =
-    pep.toLowerCase().replace(/[\s_-]/g, "");
+    canonicalizePepId(pep);
 
-  const allowedIds =
+  return [...analyticalEntityPepIds(analytical, "allowed")]
+    .some(id => id === compactPep || id.includes(compactPep));
+
+}
+
+function objectMatchesRequestedTarget(
+  item: AnalyticalResult["matchedEntities"][number],
+  objectPhrase: string
+): boolean {
+
+  const needle =
+    objectPhrase.toLowerCase().replace(/[^\w]+/g, "");
+
+  if (!needle) {
+    return true;
+  }
+
+  const candidates =
     [
-      ...analytical.deduplicatedEntityIds,
-      ...analytical.matchedEntities.map(item => item.entityId),
-      ...(analytical.nonMatchingEntities ?? []).map(item => item.entityId),
-      ...(analytical.universeEntityIds ?? [])
-    ];
+      item.objectLabel,
+      item.objectEntityId,
+      item.objectEntityId?.split(":").pop()
+    ]
+      .filter((value): value is string => Boolean(value?.trim()))
+      .map(value => value.toLowerCase().replace(/[^\w]+/g, ""));
 
-  return allowedIds.some(id =>
-    id.toLowerCase().replace(/[\s_-]/g, "").includes(compactPep)
+  return candidates.some(candidate =>
+    candidate === needle ||
+    candidate.endsWith(needle) ||
+    needle.endsWith(candidate)
   );
 
 }
@@ -264,16 +463,7 @@ function detectAnalyticalAnswerContradiction(
         continue;
       }
 
-      const objectText =
-        `${item.objectLabel ?? ""} ${item.objectEntityId ?? ""}`;
-
-      const needle =
-        objectPhrase.toLowerCase().replace(/[^\w]+/g, "");
-
-      const hay =
-        objectText.toLowerCase().replace(/[^\w]+/g, "");
-
-      if (needle && hay && hay !== needle && !hay.endsWith(needle) && !needle.endsWith(hay)) {
+      if (!objectMatchesRequestedTarget(item, objectPhrase)) {
         return (
           `Analytical matches include object "${item.objectLabel ?? item.objectEntityId}" ` +
           `which is not the requested target "${objectPhrase}"`
@@ -323,14 +513,18 @@ function detectAnalyticalAnswerContradiction(
         : undefined;
 
     if (expected !== undefined) {
-      const candidates =
-        extractCountCandidates(answer);
+      const explicitCounts =
+        extractExplicitCountClaims(answer, analytical);
 
       /*
-       * Only reject when an explicit non-PEP numeric/word count is present
-       * and none of those candidates equal the analytical value.
-       * Answers that list matched PEPs without restating the count remain valid.
+       * Prefer explicit count phrases. Fall back to ambient digits only after
+       * stripping matched-entity PEP numbers so list IDs cannot invent counts.
        */
+      const candidates =
+        explicitCounts.length > 0
+          ? explicitCounts
+          : extractCountCandidates(answer, analytical);
+
       if (
         candidates.length > 0 &&
         !candidates.includes(expected)
@@ -343,17 +537,48 @@ function detectAnalyticalAnswerContradiction(
 
     /*
      * Compound "how many … and which …": PEPs named in the answer must be
-     * within the structured match/universe sets.
+     * within the structured match/universe sets. Extra entities fail closed.
      */
     if (
       analytical.requestedOutputs?.includes("list") ||
       analytical.matchedEntities.length > 0
     ) {
-      for (const pep of extractMentionedPeps(answer)) {
+      const mentioned =
+        extractMentionedPeps(answer, analytical);
+
+      for (const pep of mentioned) {
         if (!pepAllowedByAnalytical(pep, analytical)) {
           return (
             `Answer introduces ${pep} which is not in the analytical result set`
           );
+        }
+      }
+
+      /*
+       * When the answer restates the count and names PEPs, require the named
+       * set to cover the structured matched entities (no silent omissions).
+       */
+      if (
+        analytical.requestedOutputs?.includes("list") &&
+        expected !== undefined &&
+        (
+          extractExplicitCountClaims(answer, analytical).includes(expected) ||
+          extractCountCandidates(answer, analytical).includes(expected)
+        ) &&
+        mentioned.length > 0
+      ) {
+        const matchedPeps =
+          analyticalEntityPepIds(analytical, "matched");
+
+        const mentionedPeps =
+          new Set(mentioned.map(canonicalizePepId));
+
+        for (const pep of matchedPeps) {
+          if (!mentionedPeps.has(pep)) {
+            return (
+              `Answer omits matched analytical entity ${pep.toUpperCase()}`
+            );
+          }
         }
       }
     }
@@ -373,7 +598,7 @@ function detectAnalyticalAnswerContradiction(
     }
 
     const mentioned =
-      extractCountCandidates(answer);
+      extractCountCandidates(answer, analytical);
 
     if (
       mentioned.length > 0 &&
@@ -386,7 +611,7 @@ function detectAnalyticalAnswerContradiction(
   }
 
   if (analytical.operation === "LIST") {
-    for (const pep of extractMentionedPeps(answer)) {
+    for (const pep of extractMentionedPeps(answer, analytical)) {
       if (!pepAllowedByAnalytical(pep, analytical)) {
         return (
           `Answer introduces ${pep} which is not in the analytical result set`

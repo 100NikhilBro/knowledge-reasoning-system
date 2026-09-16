@@ -183,6 +183,122 @@ describe("Prompt 2.1 — analytical verification mismatch", () => {
     ).toBe(true);
   });
 
+  it("production Q1 COUNT + LIST answer is SUPPORTED with non-zero confidence", () => {
+    const query =
+      "How many of the four PEPs in the knowledge base introduce Typing, and which PEPs are they?";
+
+    const context =
+      ctx(query, typingUniverse);
+
+    expect(context.analyticalResult?.status).toBe("SUPPORTED");
+    expect(context.analyticalResult?.value).toBe(4);
+    expect(context.analyticalResult?.requestedOutputs).toEqual([
+      "count",
+      "list"
+    ]);
+    expect(
+      context.analyticalResult?.matchedEntities.map(item => item.entityId)
+    ).toEqual([
+      "proposal:PEP-484",
+      "proposal:PEP-526",
+      "proposal:PEP-544",
+      "proposal:PEP-604"
+    ]);
+
+    /*
+     * Production-shaped generator prose: restates universe "four", lists
+     * matched PEPs, and does not copy the deterministic renderer verbatim.
+     */
+    const productionAnswer =
+      "Of the four PEPs in the knowledge base, PEP-484, PEP-526, PEP-544, and PEP-604 introduce Typing.";
+
+    const check =
+      verifyAnswerAgainstIntent(productionAnswer, context);
+
+    expect(check.semantics.status).toBe("SUPPORTED");
+    expect(check.semantics.reasons).toEqual([]);
+
+    const outcome =
+      verifier.verify({
+        result: {
+          answer: productionAnswer,
+          confidence: 0.55,
+          citations: [],
+          trace: { steps: [] }
+        },
+        context
+      });
+
+    expect(outcome.result.confidence).toBeGreaterThan(0);
+    expect(outcome.result.confidenceLevel).not.toBe("NONE");
+    expect(
+      outcome.result.trace.steps.some(step =>
+        /Verification:.*SUPPORTED/i.test(step.description)
+      )
+    ).toBe(true);
+    expect(
+      outcome.result.trace.steps.some(step =>
+        /generated answer contradicted analytical result/i.test(step.description)
+      )
+    ).toBe(false);
+  });
+
+  it("COUNT + LIST with bare PEP numbers does not force confidence to 0", () => {
+    const query =
+      "How many of the four PEPs in the knowledge base introduce Typing, and which PEPs are they?";
+
+    const context =
+      ctx(query, typingUniverse);
+
+    /*
+     * Generator lists entity property numbers without restating count:4.
+     * Must not leave stale NOT_SUPPORTED calibration on a valid AnalyticalResult.
+     */
+    const bareNumberAnswer =
+      "The PEPs that introduce Typing are Type Hints (484), Variable Annotations (526), Protocols (544), and Union X | Y (604).";
+
+    const outcome =
+      verifier.verify({
+        result: {
+          answer: bareNumberAnswer,
+          confidence: 0.4,
+          citations: [],
+          trace: { steps: [] }
+        },
+        context
+      });
+
+    expect(outcome.result.confidence).toBeGreaterThan(0);
+    expect(outcome.result.answer).toMatch(/Count of distinct PEPs|PEP-484/i);
+    expect(outcome.report.reasons).toEqual([]);
+    expect(
+      outcome.result.trace.steps.some(step =>
+        /SUPPORTED — analytical answer (?:accepted|constrained)/i
+          .test(step.description)
+      )
+    ).toBe(true);
+  });
+
+  it("canonical PEP ID formatting differences are accepted", () => {
+    const query =
+      "How many PEPs introduce Typing, and which PEPs are they?";
+
+    const context =
+      ctx(query, typingUniverse);
+
+    const variants = [
+      "There are 4 PEPs: PEP-484, PEP-526, PEP-544, PEP-604.",
+      "Count: 4. Matched: proposal:PEP-484, proposal:PEP-526, proposal:PEP-544, proposal:PEP-604.",
+      "Count: 4. Matched: proposal\\:PEP-484, proposal\\:PEP-526, proposal\\:PEP-544, proposal\\:PEP-604."
+    ];
+
+    for (const answer of variants) {
+      expect(
+        verifyAnswerAgainstIntent(answer, context).semantics.status
+      ).toBe("SUPPORTED");
+    }
+  });
+
   it("supported COUNT + empty complement is accepted", () => {
     const query =
       "How many PEPs introduce Typing, and which PEPs do not?";
@@ -255,6 +371,38 @@ describe("Prompt 2.1 — analytical verification mismatch", () => {
     const check =
       verifyAnswerAgainstIntent(
         "PEP-999 introduces Typing.",
+        context
+      );
+
+    expect(check.semantics.status).toBe("NOT_SUPPORTED");
+  });
+
+  it("extra list entity is rejected for COUNT + LIST", () => {
+    const query =
+      "How many PEPs introduce Typing, and which PEPs are they?";
+
+    const context =
+      ctx(query, typingUniverse);
+
+    const check =
+      verifyAnswerAgainstIntent(
+        "There are 4 PEPs: PEP-484, PEP-526, PEP-544, PEP-604, and PEP-999.",
+        context
+      );
+
+    expect(check.semantics.status).toBe("NOT_SUPPORTED");
+  });
+
+  it("missing list entity is rejected when count is restated", () => {
+    const query =
+      "How many PEPs introduce Typing, and which PEPs are they?";
+
+    const context =
+      ctx(query, typingUniverse);
+
+    const check =
+      verifyAnswerAgainstIntent(
+        "There are 4 PEPs: PEP-484, PEP-526, and PEP-544.",
         context
       );
 
