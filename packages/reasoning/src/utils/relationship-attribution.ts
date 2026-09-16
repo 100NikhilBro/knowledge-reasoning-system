@@ -37,6 +37,11 @@ const ATTRIBUTION_CHECKS: Array<{
    * for INTRODUCES-style passives ("Typing was introduced by X").
    */
   passive?: boolean;
+  /**
+   * When true, regex groups are [agent, patient] for active authorship
+   * ("Author proposed Proposal" → Proposal PROPOSED_BY Author).
+   */
+  agentFirst?: boolean;
 }> = [
   {
     type: "ADDRESSES",
@@ -68,6 +73,15 @@ const ATTRIBUTION_CHECKS: Array<{
     pattern:
       new RegExp(
         String.raw`\b(${NOUN_PHRASE})\s+was proposed by\s+(${NOUN_PHRASE})${CLAUSE_STOP}`,
+        "gi"
+      )
+  },
+  {
+    type: "PROPOSED_BY",
+    agentFirst: true,
+    pattern:
+      new RegExp(
+        String.raw`\b(${NOUN_PHRASE})\s+(?<!was\s)proposed\s+(?!by\b)(${NOUN_PHRASE})${CLAUSE_STOP}`,
         "gi"
       )
   },
@@ -166,7 +180,7 @@ const STOP_SUBJECT =
   /^(?:and|or|but|the|a|an|it|this|that|they|he|she|was|by|been)$/i;
 
 const RELATIONSHIP_CUE =
-  /\b(?:introduced|introduces|introduce|addressed|addresses|was proposed by|proposed by|resulted in|results in|implemented in|was introduced by|->\s*(?:INTRODUCES|ADDRESSES|PROPOSED_BY|RESULTS_IN|IMPLEMENTED_IN)\s*->)/i;
+  /\b(?:introduced|introduces|introduce|addressed|addresses|was proposed by|proposed by|(?<!was\s)proposed\b|resulted in|results in|implemented in|was introduced by|->\s*(?:INTRODUCES|ADDRESSES|PROPOSED_BY|RESULTS_IN|IMPLEMENTED_IN)\s*->)/i;
 
 /**
  * Reject answers that linguistically attribute a relationship to the
@@ -286,10 +300,25 @@ function collectAttributionAssertions(
       const second =
         (match[2] ?? "").trim();
 
-      const source =
-        check.passive ? second : first;
-      const target =
-        check.passive ? first : second;
+      let source: string;
+      let target: string;
+
+      if (check.passive) {
+        /*
+         * "Feature was introduced by Proposal" → from=Proposal, to=Feature
+         */
+        source = second;
+        target = first;
+      } else if (check.agentFirst) {
+        /*
+         * "Author proposed Proposal" → from=Proposal, to=Author (PROPOSED_BY)
+         */
+        source = second;
+        target = first;
+      } else {
+        source = first;
+        target = second;
+      }
 
       if (
         !source ||
