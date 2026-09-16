@@ -59,6 +59,17 @@ export interface ReasoningTraceMeta {
     explanation?: string;
   };
 
+  /**
+   * Diagnostic-only: preserves the pre-attribution answer when verification
+   * may replace it with a grounded fallback. Does not affect status semantics.
+   */
+  attributionDiagnostics?: {
+    originalAnswerBeforeVerification: string;
+    attributionResult: boolean;
+    finalAnswerAfterVerification: string;
+    finalVerificationStatus: string;
+  };
+
 }
 
 export interface ReasoningTrace {

@@ -267,11 +267,19 @@ function resolveCalibratedConfidence(
 
 }
 
+type AttributionDiagnostics = {
+  originalAnswerBeforeVerification: string;
+  attributionResult: boolean;
+  finalAnswerAfterVerification: string;
+  finalVerificationStatus: string;
+};
+
 function withVerificationTrace(
   result: ReasoningResult,
   context: ReasoningContext,
   verification?: AnswerIntentVerification,
-  extraReasons: string[] = []
+  extraReasons: string[] = [],
+  attributionDiagnostics?: AttributionDiagnostics
 ): ReasoningResult {
 
   const forceNone =
@@ -386,15 +394,17 @@ function withVerificationTrace(
     });
   }
 
+  const verificationStatus =
+    resolveVerificationStatus(
+      verification,
+      extraReasons,
+      forceNone
+    ) ??
+    (forceNone ? "NOT_SUPPORTED" : undefined);
+
   const meta = {
     ...(enrichedTrace.meta ?? {}),
-    verificationStatus:
-      resolveVerificationStatus(
-        verification,
-        extraReasons,
-        forceNone
-      ) ??
-      (forceNone ? "NOT_SUPPORTED" : undefined),
+    verificationStatus,
     ...(verification
       ? {
           claimSupport: {
@@ -417,7 +427,18 @@ function withVerificationTrace(
       score: calibrated.score,
       level: calibrated.level,
       reasons: calibrated.reasons
-    }
+    },
+    ...(attributionDiagnostics
+      ? {
+          attributionDiagnostics: {
+            ...attributionDiagnostics,
+            finalVerificationStatus:
+              attributionDiagnostics.finalVerificationStatus ||
+              verificationStatus ||
+              "UNKNOWN"
+          }
+        }
+      : {})
   };
 
   return {
@@ -1599,12 +1620,16 @@ implements AnswerVerifier {
 
     }
 
-    if (
-      !relationshipAttributionIsGrounded(
-        result.answer,
+    const originalAnswerBeforeVerification =
+      result.answer;
+
+    const attributionResult =
+      relationshipAttributionIsGrounded(
+        originalAnswerBeforeVerification,
         context
-      )
-    ) {
+      );
+
+    if (!attributionResult) {
 
       reasons.push(
         "Relationship attribution does not match grounded edge direction; replaced with grounded partial answer"
@@ -1634,18 +1659,28 @@ implements AnswerVerifier {
         ]
       };
 
+      const fallback =
+        safePartialGroundedResult(
+          context
+        );
+
       return {
 
         result:
           withVerificationTrace(
-            safePartialGroundedResult(
-              context
-            ),
+            fallback,
             context,
             attributionFailure,
             [
               "Verification: NOT_SUPPORTED — relationship attribution mismatch"
-            ]
+            ],
+            {
+              originalAnswerBeforeVerification,
+              attributionResult: false,
+              finalAnswerAfterVerification:
+                fallback.answer,
+              finalVerificationStatus: "NOT_SUPPORTED"
+            }
           ),
 
         report: {
@@ -1791,7 +1826,15 @@ implements AnswerVerifier {
       intentVerification,
       [
         `Verification: ${intentVerification.semantics.status} — answer accepted`
-      ]
+      ],
+      {
+        originalAnswerBeforeVerification,
+        attributionResult: true,
+        finalAnswerAfterVerification:
+          result.answer,
+        finalVerificationStatus:
+          intentVerification.semantics.status
+      }
     );
 
     if (context.comparison !== undefined) {
