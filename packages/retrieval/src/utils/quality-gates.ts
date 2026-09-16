@@ -143,9 +143,14 @@ export function applyRetrievalQualityGates(
       }
 
       /*
-       * Expansion neighbors without query alignment should not survive alone.
+       * Expansion neighbors without query alignment should not survive alone,
+       * unless they carry an attested graph relationship (relationship-aware
+       * expansion). Entity co-occurrence without an edge still fails later.
        */
       if (result.metadata?.expanded === true && hasHardConstraints) {
+        if (result.relationship) {
+          return true;
+        }
         return false;
       }
 

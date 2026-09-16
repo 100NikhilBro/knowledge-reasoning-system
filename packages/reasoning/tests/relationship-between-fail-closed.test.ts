@@ -173,7 +173,10 @@ describe("unsupported relationship-between fail-closed", () => {
     });
 
     expect(plan.strategy).toBe("multi-hop");
-    expect(plan.requireRelationshipBetween).toBeUndefined();
+    expect(plan.requireRelationshipBetween).toEqual({
+      left: "PEP-484",
+      right: "quantum computing"
+    });
     expect(plan.focusRelationships).toBeUndefined();
   });
 

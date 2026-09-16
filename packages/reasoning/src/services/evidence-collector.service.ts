@@ -82,6 +82,14 @@ implements EvidenceCollector {
 
         source: result.source,
 
+        ...(result.relationship
+          ? { relationship: result.relationship }
+          : {}),
+
+        ...(result.path
+          ? { path: result.path }
+          : {}),
+
         ...(result.metadata
           ? { metadata: result.metadata }
           : {})

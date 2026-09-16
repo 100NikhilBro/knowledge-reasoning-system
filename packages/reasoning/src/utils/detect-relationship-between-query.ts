@@ -115,6 +115,31 @@ export function detectRelationshipBetweenQuery(
     }
   }
 
+  const areRelatedMatch =
+    normalized.match(
+      /(?:are|is)\s+(.+?)\s+(?:and|&)\s+(.+?)\s+directly\s+(?:related|connected|linked)\s*\??$/i
+    ) ??
+    normalized.match(
+      /(?:are|is)\s+(.+?)\s+(?:and|&)\s+(.+?)\s+(?:related|connected|linked)(?:\s+to\s+each\s+other)?\s*\??$/i
+    );
+
+  if (areRelatedMatch) {
+    const left =
+      cleanEndpoint(areRelatedMatch[1]);
+    const right =
+      cleanEndpoint(areRelatedMatch[2]);
+
+    if (left && right) {
+      return {
+        left,
+        right,
+        mode: queryRequestsDirectRelationship(normalized)
+          ? "direct"
+          : "connected"
+      };
+    }
+  }
+
   return undefined;
 
 }

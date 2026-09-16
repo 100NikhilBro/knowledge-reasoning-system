@@ -290,6 +290,7 @@ implements IRetrievalService {
       analysis.preference === "graph" ||
       query.intent === "CONNECTED_RELATIONSHIP" ||
       query.intent === "BRIDGE_RELATIONSHIP" ||
+      query.intent === "DIRECT_RELATIONSHIP" ||
       query.intent === "RELATIONSHIP" ||
       query.intent === "COMPOUND" ||
       query.intent === "IMPLICATION";
@@ -308,9 +309,9 @@ implements IRetrievalService {
         .slice(0, seedLimit)
         .map(item => item.entity);
 
-    let expandedEntities;
+    let expandedNeighbors;
     try {
-      expandedEntities =
+      expandedNeighbors =
         await this.graph.expandFromSeeds(seeds, {
           maxNeighborsPerNode: 4,
           maxTotal: 12
@@ -319,35 +320,55 @@ implements IRetrievalService {
       return results;
     }
 
-    if (expandedEntities.length === 0) {
+    if (expandedNeighbors.length === 0) {
       return results;
     }
 
-    const seen =
-      new Set(results.map(item => item.entity.id));
+    const seenEdges =
+      new Set(
+        results
+          .filter(item => item.relationship)
+          .map(item =>
+            `${item.relationship!.from}|${item.relationship!.type}|${item.relationship!.to}`
+          )
+      );
 
     const extras: RetrievalResult[] = [];
 
-    for (const entity of expandedEntities) {
-      if (seen.has(entity.id)) {
+    for (const neighbor of expandedNeighbors) {
+      const relationship =
+        neighbor.relationship;
+
+      if (!relationship || !neighbor.neighbor?.id) {
         continue;
       }
 
-      seen.add(entity.id);
+      const edgeKey =
+        `${relationship.from}|${relationship.type}|${relationship.to}`;
+
+      if (seenEdges.has(edgeKey)) {
+        continue;
+      }
+
+      seenEdges.add(edgeKey);
 
       extras.push({
-        entity,
+        entity: neighbor.neighbor,
         /*
          * Expansion neighbors rank below fused seeds; SimpleRanker + topK
          * decide final membership.
          */
         score: 0.05,
         source: "graph",
+        relationship,
         metadata: {
           channel: "graph",
           sources: ["graph"],
           expanded: true,
-          expansionDepth: 1
+          expansionDepth: 1,
+          relationshipType: relationship.type,
+          relationshipFrom: relationship.from,
+          relationshipTo: relationship.to
         }
       });
     }

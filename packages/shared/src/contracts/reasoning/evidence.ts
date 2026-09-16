@@ -6,6 +6,10 @@ import type {
   KnowledgeRelationship
 } from "../knowledge-relationship.js";
 
+import type {
+  GraphPath
+} from "../graph/graph-path.js";
+
 export interface Evidence {
 
   entity: KnowledgeEntity;
@@ -15,10 +19,15 @@ export interface Evidence {
   source: string;
 
   /**
-   * Present only when the reasoning pipeline already produced a relationship
-   * for this evidence item (e.g. neighbor traversal).
+   * Present only when the pipeline has an attested graph edge for this item.
+   * Entity co-occurrence alone must never invent this field.
    */
   relationship?: KnowledgeRelationship;
+
+  /**
+   * Multi-hop path provenance (nodes + relationships + length) when known.
+   */
+  path?: GraphPath;
 
   /**
    * Optional retrieval provenance (e.g. hybrid sources, channel scores).

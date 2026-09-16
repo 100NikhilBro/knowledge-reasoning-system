@@ -21,7 +21,7 @@ from "../src/utils/analyze-hybrid-query.js";
 import type { RetrievalResult }
 from "../src/types/retrieval-result.js";
 
-import type { KnowledgeEntity }
+import type { KnowledgeEntity, GraphNeighbor }
 from "@knowledge/shared";
 
 function entity(
@@ -37,6 +37,23 @@ function entity(
     source,
     confidence: 1,
     properties: {}
+  };
+}
+
+function neighborOf(
+  fromId: string,
+  to: KnowledgeEntity,
+  type = "INTRODUCES"
+): GraphNeighbor {
+  return {
+    neighbor: to,
+    relationship: {
+      from: fromId,
+      to: to.id,
+      type,
+      confidence: 1,
+      properties: {}
+    }
   };
 }
 
@@ -208,7 +225,11 @@ describe("P4 intent-aware hybrid retrieval", () => {
             result("concern:readability", 7, "graph", "Readability")
           ]),
           expandFromSeeds: vi.fn(async () => [
-            entity("proposal:PEP-484", "Proposal", "Type Hints")
+            neighborOf(
+              "feature:typing",
+              entity("proposal:PEP-484", "Proposal", "Type Hints"),
+              "ADDRESSES"
+            )
           ])
         },
         {
@@ -254,7 +275,11 @@ describe("P4 intent-aware hybrid retrieval", () => {
         expect(seeds.length).toBeGreaterThan(0);
 
         return [
-          entity("proposal:PEP-484", "Proposal", "Type Hints")
+          neighborOf(
+            "feature:typing",
+            entity("proposal:PEP-484", "Proposal", "Type Hints"),
+            "ADDRESSES"
+          )
         ];
       });
 
@@ -600,10 +625,14 @@ describe("P4 intent-aware hybrid retrieval", () => {
         expect(options?.maxTotal).toBe(12);
 
         return Array.from({ length: 20 }, (_, index) =>
-          entity(
-            `feature:extra-${index}`,
-            "Feature",
-            `Extra ${index}`
+          neighborOf(
+            "feature:typing",
+            entity(
+              `feature:extra-${index}`,
+              "Feature",
+              `Extra ${index}`
+            ),
+            "RELATED_TO"
           )
         );
       });

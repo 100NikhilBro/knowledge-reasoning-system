@@ -70,6 +70,13 @@ function toGroundedItem(
 
   }
 
+  if (evidence.path !== undefined) {
+
+    item.path =
+      evidence.path;
+
+  }
+
   return item;
 
 }

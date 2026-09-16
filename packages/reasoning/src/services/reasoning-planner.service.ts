@@ -53,6 +53,11 @@ implements ReasoningPlanner {
         understanding.requireRelationshipBetween;
     }
 
+    if (understanding.bridgeEntity) {
+      plan.bridgeEntity =
+        understanding.bridgeEntity;
+    }
+
     return plan;
 
   }

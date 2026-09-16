@@ -943,7 +943,15 @@ function resolveStrategy(
     return {
       strategy: "multi-hop",
       maxDepth: 2,
-      traversal: "bfs"
+      traversal: "bfs",
+      ...(between
+        ? {
+            requireRelationshipBetween: {
+              left: between.left,
+              right: between.right
+            }
+          }
+        : {})
     };
   }
 

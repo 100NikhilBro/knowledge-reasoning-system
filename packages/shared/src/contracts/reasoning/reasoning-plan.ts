@@ -49,11 +49,18 @@ export interface ReasoningPlan {
   /**
    * When set, single-hop must ground an edge connecting both phrases.
    * If no such edge exists, evidence is emptied (fail closed).
+   * Also passed for CONNECTED/BRIDGE so downstream path interpretation
+   * receives explicit endpoints from the plan.
    */
   requireRelationshipBetween?: {
     left: string;
     right: string;
   };
+
+  /**
+   * Optional bridge phrase for BRIDGE_RELATIONSHIP plans.
+   */
+  bridgeEntity?: string;
 
   /**
    * Canonical query intent from P2 understanding (routing metadata).

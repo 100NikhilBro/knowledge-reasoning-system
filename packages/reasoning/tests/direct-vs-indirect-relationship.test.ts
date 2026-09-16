@@ -247,7 +247,11 @@ describe("direct vs indirect relationship semantics", () => {
       await planner.plan({ query });
 
     expect(plan.strategy).toBe("multi-hop");
-    expect(plan.requireRelationshipBetween).toBeUndefined();
+    expect(plan.requireRelationshipBetween).toEqual({
+      left: "Typing",
+      right: "Readability"
+    });
+    expect(plan.bridgeEntity).toMatch(/PEP-484/i);
 
     const context =
       contextFor(query, hubEvidence);

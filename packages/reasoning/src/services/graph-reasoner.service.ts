@@ -73,7 +73,9 @@ implements GraphReasoner {
 
       score: 0.75,
 
-      source: "graph"
+      source: "graph",
+
+      relationship: neighbor.relationship
 
     };
 
@@ -91,13 +93,20 @@ implements GraphReasoner {
 
     for (const item of evidence) {
 
-      unique.set(
+      const key =
+        item.relationship
+          ? `${item.entity.id}|${item.relationship.from}|${item.relationship.type}|${item.relationship.to}`
+          : item.entity.id;
 
-        item.entity.id,
+      const existing =
+        unique.get(key);
 
-        item
-
-      );
+      if (
+        !existing ||
+        item.score > existing.score
+      ) {
+        unique.set(key, item);
+      }
 
     }
 

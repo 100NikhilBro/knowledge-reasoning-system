@@ -59,6 +59,10 @@ export function traversalHitsToEvidence(
         seeded.relationship = hit.relationship;
       }
 
+      if (hit.path !== undefined) {
+        seeded.path = hit.path;
+      }
+
       expanded.push(seeded);
       continue;
     }
@@ -77,6 +81,10 @@ export function traversalHitsToEvidence(
 
     if (hit.relationship !== undefined) {
       item.relationship = hit.relationship;
+    }
+
+    if (hit.path !== undefined) {
+      item.path = hit.path;
     }
 
     expanded.push(item);

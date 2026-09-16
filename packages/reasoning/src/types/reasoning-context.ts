@@ -1,5 +1,6 @@
 import type {
   Evidence,
+  GraphPath,
   KnowledgeRelationship
 } from "@knowledge/shared";
 
@@ -51,6 +52,11 @@ export interface GroundedEvidenceItem {
    * Included only when the reasoning pipeline already produced a relationship.
    */
   relationship?: KnowledgeRelationship;
+
+  /**
+   * Multi-hop path provenance when traversal preserved a GraphPath.
+   */
+  path?: GraphPath;
 
 }
 

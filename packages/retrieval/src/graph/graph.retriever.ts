@@ -365,6 +365,9 @@ implements GraphRetriever {
 
   /**
    * Bounded 1-hop expansion from seed entities.
+   * Preserves real GraphNeighbor relationship metadata (from/type/to).
+   * Deduplicates by edge identity so independent branches to the same
+   * hub are not collapsed into a single entity-only hit.
    */
   async expandFromSeeds(
     seeds: KnowledgeEntity[],
@@ -372,7 +375,7 @@ implements GraphRetriever {
       maxNeighborsPerNode?: number;
       maxTotal?: number;
     }
-  ): Promise<KnowledgeEntity[]> {
+  ): Promise<GraphNeighbor[]> {
 
     const maxNeighborsPerNode =
       options?.maxNeighborsPerNode ?? 5;
@@ -380,9 +383,9 @@ implements GraphRetriever {
     const maxTotal =
       options?.maxTotal ?? 20;
 
-    const expanded: KnowledgeEntity[] = [];
-    const seen =
-      new Set(seeds.map(seed => seed.id));
+    const expanded: GraphNeighbor[] = [];
+    const seenEdges =
+      new Set<string>();
 
     for (const seed of seeds) {
       if (expanded.length >= maxTotal) {
@@ -400,12 +403,25 @@ implements GraphRetriever {
           const entity =
             neighbor.neighbor;
 
-          if (!entity?.id || seen.has(entity.id)) {
+          const relationship =
+            neighbor.relationship;
+
+          if (!entity?.id || !relationship) {
             continue;
           }
 
-          seen.add(entity.id);
-          expanded.push(entity);
+          const edgeKey =
+            `${relationship.from}|${relationship.type}|${relationship.to}`;
+
+          if (seenEdges.has(edgeKey)) {
+            continue;
+          }
+
+          seenEdges.add(edgeKey);
+          expanded.push({
+            relationship,
+            neighbor: entity
+          });
 
           if (expanded.length >= maxTotal) {
             break;
