@@ -516,35 +516,39 @@ function buildEntityCatalog(
         id: item.entity.id,
         label: item.entity.label,
         source: item.entity.source,
-        properties: {
-          ...(item.entity.properties ?? {}),
-          ...(claim.subject
-            ? { claimSubject: claim.subject }
-            : {}),
-          ...(claim.object
-            ? { claimObject: claim.object }
-            : {})
-        }
+        properties: item.entity.properties
       });
 
       if (item.relationship) {
-        if (!catalog.has(item.relationship.from) && claim.subject) {
+        if (!catalog.has(item.relationship.from)) {
+          const synthesized =
+            synthesizeEndpoint(item.relationship.from);
+
           upsert({
-            ...synthesizeEndpoint(item.relationship.from),
-            properties: {
-              ...synthesizeEndpoint(item.relationship.from).properties,
-              claimSubject: claim.subject
-            }
+            ...synthesized,
+            /*
+             * Prefer the claim's subject phrase as the display label for a
+             * missing from-endpoint — never attach object phrases onto from.
+             */
+            label:
+              claim.subject?.trim() ||
+              synthesized.label
           });
         }
 
-        if (!catalog.has(item.relationship.to) && claim.object) {
+        if (!catalog.has(item.relationship.to)) {
+          const synthesized =
+            synthesizeEndpoint(item.relationship.to);
+
           upsert({
-            ...synthesizeEndpoint(item.relationship.to),
-            properties: {
-              ...synthesizeEndpoint(item.relationship.to).properties,
-              claimObject: claim.object
-            }
+            ...synthesized,
+            label:
+              (
+                claim.object &&
+                isCleanClaimObject(claim.object)
+              )
+                ? claim.object.trim()
+                : synthesized.label
           });
         }
       }
@@ -591,6 +595,28 @@ function synthesizeEndpoint(
       ? { pep }
       : {}
   };
+
+}
+
+function isCleanClaimObject(
+  value: string
+): boolean {
+
+  const trimmed =
+    value.trim();
+
+  if (!trimmed) {
+    return false;
+  }
+
+  if (
+    /\band\b/i.test(trimmed) &&
+    /\b(?:introduc|address|propos|result|implement)\w*/i.test(trimmed)
+  ) {
+    return false;
+  }
+
+  return true;
 
 }
 

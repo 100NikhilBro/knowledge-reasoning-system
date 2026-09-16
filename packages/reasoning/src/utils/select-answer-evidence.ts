@@ -1442,13 +1442,17 @@ export interface StructuredAnswerContext {
 
 /**
  * Bind answer-scoped evidence to each requested atomic claim.
+ *
+ * When the scope has no explicit claims/predicates (connected/bridge path
+ * modes), derive one claim binding per unique relationship already retained
+ * in answerEvidence so attribution validates against bound edges only.
  */
 export function bindClaimEvidence(
   scope: AnswerEvidenceScope,
   answerEvidence: Evidence[]
 ): ClaimEvidence[] {
 
-  const claims =
+  const explicitClaims =
     scope.requestedClaims.length > 0
       ? scope.requestedClaims
       : scope.requestedPredicates.map((predicate, index) => ({
@@ -1458,6 +1462,11 @@ export function bindClaimEvidence(
           inferenceMode: "typed_edge" as const,
           claimId: `focus-${index}`
         }));
+
+  const claims =
+    explicitClaims.length > 0
+      ? explicitClaims
+      : deriveClaimsFromAnswerRelationships(scope, answerEvidence);
 
   return claims.map((claim, index) => {
     const subject =
@@ -1504,9 +1513,178 @@ export function bindClaimEvidence(
       subject,
       predicate,
       object,
-      evidence: matched
+      evidence:
+        withClaimEndpointIdentities(matched, answerEvidence)
     };
   });
+
+}
+
+/**
+ * Derive claim bindings from already-scoped relationship rows when the
+ * query did not emit explicit LogicalClaim entries (typical connected /
+ * bridge path asks).
+ */
+function deriveClaimsFromAnswerRelationships(
+  scope: AnswerEvidenceScope,
+  answerEvidence: Evidence[]
+): Array<{
+  subject: string;
+  predicate: string;
+  object: string;
+  inferenceMode: "typed_edge";
+}> {
+
+  const seen =
+    new Set<string>();
+
+  const derived: Array<{
+    subject: string;
+    predicate: string;
+    object: string;
+    inferenceMode: "typed_edge";
+  }> = [];
+
+  for (const item of answerEvidence) {
+    const relationship =
+      item.relationship;
+
+    if (!relationship) {
+      continue;
+    }
+
+    const key =
+      `${relationship.from}|${relationship.type}|${relationship.to}`;
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+
+    derived.push({
+      subject:
+        resolveEndpointPhrase(
+          relationship.from,
+          scope,
+          answerEvidence,
+          "subject"
+        ),
+      predicate: relationship.type,
+      object:
+        resolveEndpointPhrase(
+          relationship.to,
+          scope,
+          answerEvidence,
+          "object"
+        ),
+      inferenceMode: "typed_edge"
+    });
+  }
+
+  return derived;
+
+}
+
+function resolveEndpointPhrase(
+  endpointId: string,
+  scope: AnswerEvidenceScope,
+  answerEvidence: Evidence[],
+  role: "subject" | "object"
+): string {
+
+  const endpoint =
+    findEntity(answerEvidence, endpointId) ??
+    {
+      id: endpointId,
+      label: endpointId.includes(":")
+        ? endpointId.slice(endpointId.indexOf(":") + 1)
+        : endpointId,
+      source: "",
+      properties: {}
+    };
+
+  const candidates =
+    role === "subject"
+      ? [
+          ...scope.focusSubjects,
+          scope.relationshipBetween?.left,
+          scope.relationshipBetween?.right
+        ]
+      : [
+          ...scope.focusObjects,
+          scope.relationshipBetween?.right,
+          scope.relationshipBetween?.left,
+          scope.bridgeEntity
+        ];
+
+  for (const phrase of candidates) {
+    if (
+      phrase &&
+      entityMatchesPhrase(endpoint, phrase)
+    ) {
+      return phrase;
+    }
+  }
+
+  return endpoint.label || endpointId;
+
+}
+
+/**
+ * Ensure each bound claim retains identity rows for relationship endpoints
+ * (id / label / properties) so alias resolution can use existing metadata.
+ */
+function withClaimEndpointIdentities(
+  matched: Evidence[],
+  answerEvidence: Evidence[]
+): Evidence[] {
+
+  const out =
+    [...matched];
+
+  const hasIdentity =
+    (id: string) =>
+      out.some(item =>
+        item.entity.id === id && !item.relationship
+      );
+
+  for (const item of matched) {
+    if (!item.relationship) {
+      continue;
+    }
+
+    for (const endpointId of [
+      item.relationship.from,
+      item.relationship.to
+    ]) {
+      if (hasIdentity(endpointId)) {
+        continue;
+      }
+
+      const identity =
+        answerEvidence.find(entry =>
+          entry.entity.id === endpointId &&
+          !entry.relationship
+        ) ??
+        answerEvidence.find(entry =>
+          entry.entity.id === endpointId
+        );
+
+      if (identity) {
+        out.push({
+          entity: identity.entity,
+          score: identity.score,
+          source: identity.source,
+          ...(identity.metadata
+            ? { metadata: identity.metadata }
+            : {})
+        });
+      }
+    }
+  }
+
+  return out;
 
 }
 
