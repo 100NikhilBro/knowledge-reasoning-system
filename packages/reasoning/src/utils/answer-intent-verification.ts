@@ -8,7 +8,9 @@ import {
 
 import {
   evaluateLogicalImplication,
-  type ImplicationSupport
+  evaluateClaimsAgainstEvidence,
+  type ImplicationSupport,
+  type LogicalClaim
 } from "./logical-implication.js";
 
 import {
@@ -286,6 +288,51 @@ function buildCompoundClaims(
   context: ReasoningContext
 ): StructuredAnswerClaim[] {
 
+  if (understanding.claims.length > 0) {
+    const decision =
+      evaluateClaimsAgainstEvidence(
+        understanding.claims as LogicalClaim[],
+        context
+      );
+
+    return decision.claims.map(evaluation => {
+      const evidenceSupported =
+        evaluation.support === "SUPPORTED";
+
+      const answerHas =
+        claimCoveredInAnswer(
+          evaluation.claim,
+          answer,
+          context
+        );
+
+      if (evidenceSupported && answerHas) {
+        return {
+          subject: evaluation.claim.subject,
+          predicate: evaluation.claim.predicate,
+          object: evaluation.claim.object,
+          status: "SUPPORTED" as const
+        };
+      }
+
+      if (evidenceSupported && !answerHas) {
+        return {
+          subject: evaluation.claim.subject,
+          predicate: evaluation.claim.predicate,
+          object: evaluation.claim.object,
+          status: "MISSING" as const
+        };
+      }
+
+      return {
+        subject: evaluation.claim.subject,
+        predicate: evaluation.claim.predicate,
+        object: evaluation.claim.object,
+        status: "NOT_SUPPORTED" as const
+      };
+    });
+  }
+
   const focuses =
     understanding.relationshipRequested.length > 0
       ? understanding.relationshipRequested
@@ -319,6 +366,68 @@ function buildCompoundClaims(
       status: "NOT_SUPPORTED" as const
     };
   });
+
+}
+
+function claimCoveredInAnswer(
+  claim: LogicalClaim,
+  answer: string,
+  context: ReasoningContext
+): boolean {
+
+  if (claim.inferenceMode === "causal_extra") {
+    /*
+     * Unsupported causal/chronology claims should only count as covered
+     * when the answer explicitly bounds them as unsupported.
+     */
+    return answerBoundsUnsupported(answer);
+  }
+
+  if (
+    claim.object &&
+    mentionsPhrase(answer, claim.object)
+  ) {
+    return true;
+  }
+
+  if (focusCoveredInAnswer(claim.predicate, answer, context)) {
+    /*
+     * For open object requests, a focus cue / grounded endpoint mention
+     * is enough. Still require subject when the answer names a different
+     * PEP so spillover prose cannot cover the claim.
+     */
+    if (!claim.subject?.trim()) {
+      return true;
+    }
+
+    if (mentionsPhrase(answer, claim.subject) || /\bit\b/i.test(answer)) {
+      return true;
+    }
+
+    const foreignPep =
+      answer.match(/\bPEP[\s_-]?(\d+)\b/gi) ?? [];
+
+    const subjectPep =
+      claim.subject.match(/\bPEP[\s_-]?(\d+)\b/i)?.[1];
+
+    if (
+      subjectPep &&
+      foreignPep.some(match => {
+        const digits =
+          match.match(/(\d+)/)?.[1];
+        return digits && digits !== subjectPep;
+      })
+    ) {
+      return false;
+    }
+
+    /*
+     * Author-only answers for PROPOSED_BY remain covered via focus cues.
+     */
+    return true;
+  }
+
+  return false;
 
 }
 

@@ -161,7 +161,120 @@ export function extractConclusionClause(
 }
 
 /**
- * Parse one or more atomic claims from a conclusion clause.
+ * Split only genuinely independent claim/request clauses.
+ * Does not split ordinary noun phrases such as "Typing and Readability".
+ * Recursively refines until no further independent splits remain.
+ */
+export function splitIndependentClaimClauses(
+  text: string
+): string[] {
+
+  const normalized =
+    text.trim().replace(/\s+/g, " ");
+
+  if (!normalized) {
+    return [];
+  }
+
+  const separators: RegExp[] = [
+    /\s*,\s*(?=what\b|who\b|how\b)/i,
+    /\s*,\s*and\s+(?=did\b|does\b|do\b|was\b|were\b|is\b|are\b|who\b|what\b|how\b|can\b)/i,
+    /\s+and\s+(?=did\b|does\b|do\b|was\b|were\b|who\b|what\b|how\b|can\b)/i,
+    /\s+and that\s+/i
+  ];
+
+  let parts =
+    [normalized];
+
+  let changed =
+    true;
+
+  while (changed) {
+    changed = false;
+    const next: string[] = [];
+
+    for (const part of parts) {
+      const split =
+        splitOnceIndependent(part, separators);
+
+      if (split.length > 1) {
+        next.push(...split);
+        changed = true;
+      } else {
+        next.push(part);
+      }
+    }
+
+    parts = next;
+  }
+
+  if (
+    parts.length >= 2 &&
+    parts.every(looksLikeIndependentClause)
+  ) {
+    return parts;
+  }
+
+  return [normalized];
+
+}
+
+function splitOnceIndependent(
+  text: string,
+  separators: RegExp[]
+): string[] {
+
+  for (const separator of separators) {
+    if (!separator.test(text)) {
+      continue;
+    }
+
+    const parts =
+      text
+        .split(separator)
+        .map(part => part.trim().replace(/^and\s+/i, "").trim())
+        .filter(Boolean);
+
+    if (
+      parts.length >= 2 &&
+      parts.every(looksLikeIndependentClause)
+    ) {
+      return parts;
+    }
+  }
+
+  return [text];
+
+}
+
+function looksLikeIndependentClause(
+  clause: string
+): boolean {
+
+  const normalized =
+    clause.trim();
+
+  if (!normalized || normalized.split(/\s+/).length < 2) {
+    return false;
+  }
+
+  /*
+   * Reject bare entity pairs left after a bad split ("Typing", "Readability").
+   */
+  if (/^[\w.-]+$/i.test(normalized)) {
+    return false;
+  }
+
+  return (
+    /^(?:did|does|do|was|were|is|are|who|what|how|can|why)\b/i.test(normalized) ||
+    /\b(?:introduce|introduced|introduces|address|addressed|addresses|propos(?:e|ed|es)|caus(?:e|ed|es)|improv(?:e|es|ed)|related|connected|imply|implies|conclude)\b/i
+      .test(normalized)
+  );
+
+}
+
+/**
+ * Parse one or more atomic claims from a conclusion clause or compound query.
  */
 export function extractLogicalClaims(
   query: string
@@ -173,10 +286,10 @@ export function extractLogicalClaims(
   const claims: LogicalClaim[] = [];
 
   const segments =
-    clause
-      .split(/\band that\b/i)
-      .map(part => part.trim())
-      .filter(Boolean);
+    splitIndependentClaimClauses(clause);
+
+  let resolvedSubject: string | undefined =
+    extractLeadingSubject(clause);
 
   for (const segment of segments) {
 
@@ -193,13 +306,23 @@ export function extractLogicalClaims(
       const object =
         causalTail[3]?.trim() ?? "";
 
-      claims.push(
-        ...extractAtomicClaims(head)
-      );
+      const headClaims =
+        extractAtomicClaims(head, resolvedSubject);
+
+      claims.push(...headClaims);
+
+      const subject =
+        extractPrimarySubject(head) ??
+        resolvedSubject ??
+        head;
+
+      if (subject && !isPronoun(subject)) {
+        resolvedSubject = subject;
+      }
 
       claims.push({
         subject:
-          extractPrimarySubject(head) ?? head,
+          resolveSubjectToken(subject, resolvedSubject),
         predicate:
           verb.toUpperCase() === "IMPROVE"
             ? "IMPROVES"
@@ -211,9 +334,19 @@ export function extractLogicalClaims(
       continue;
     }
 
-    claims.push(
-      ...extractAtomicClaims(segment)
-    );
+    const segmentClaims =
+      extractAtomicClaims(segment, resolvedSubject);
+
+    for (const claim of segmentClaims) {
+      if (claim.subject && !isPronoun(claim.subject)) {
+        resolvedSubject = claim.subject;
+      }
+      claims.push(claim);
+    }
+
+    if (segmentClaims.length > 0) {
+      continue;
+    }
 
     const between =
       detectRelationshipBetweenQuery(segment) ??
@@ -291,7 +424,8 @@ function detectEmbeddedRelatedness(
 }
 
 function extractAtomicClaims(
-  text: string
+  text: string,
+  fallbackSubject?: string
 ): LogicalClaim[] {
 
   const claims: LogicalClaim[] = [];
@@ -299,52 +433,166 @@ function extractAtomicClaims(
     text
       .trim()
       .replace(/^(?:why|how)\s+(?:did|does|do|is|are|was|were)\s+/i, "")
-      .replace(/^(?:why|how)\s+/i, "");
+      .replace(/^(?:why|how)\s+/i, "")
+      .replace(/^(?:did|does|do|was|were|is|are)\s+/i, "")
+      .replace(/\?+$/g, "")
+      .trim();
 
   if (!normalized) {
     return claims;
   }
 
-  const introduced =
+  /*
+   * Chronology / ordering before INTRODUCES matching.
+   */
+  const chronology =
     normalized.match(
-      /(.+?)\s+introduced\s+(.+)/i
+      /^(.+?)\s+introduced after\s+(.+)$/i
     ) ??
     normalized.match(
-      /(.+?)\s+introduces\s+(.+)/i
+      /^(.+?)\s+introduced before\s+(.+)$/i
+    ) ??
+    normalized.match(
+      /^(.+?)\s+(?:happen(?:ed)?|occur(?:red)?)\s+(?:before|after)\s+(.+)$/i
+    );
+
+  if (chronology) {
+    const after =
+      /\bafter\b/i.test(normalized);
+
+    claims.push({
+      subject:
+        resolveSubjectToken(clean(chronology[1]), fallbackSubject),
+      predicate: after ? "AFTER" : "BEFORE",
+      object: clean(chronology[2]),
+      inferenceMode: "causal_extra"
+    });
+
+    return claims;
+  }
+
+  const whoProposed =
+    normalized.match(
+      /^who proposed\s+(.+)$/i
+    );
+
+  if (whoProposed) {
+    claims.push({
+      subject: clean(whoProposed[1]),
+      predicate: "PROPOSED_BY",
+      object: "",
+      inferenceMode: "typed_edge"
+    });
+    return claims;
+  }
+
+  const whatIntroduce =
+    normalized.match(
+      /^what(?:\s+feature)?\s+did\s+(.+?)\s+introduce$/i
+    ) ??
+    normalized.match(
+      /^what did\s+(.+?)\s+introduce$/i
+    ) ??
+    normalized.match(
+      /^what(?:\s+feature)?\s+did\s+(it)\s+introduce$/i
+    );
+
+  if (whatIntroduce) {
+    claims.push({
+      subject:
+        resolveSubjectToken(clean(whatIntroduce[1]), fallbackSubject),
+      predicate: "INTRODUCES",
+      object: "",
+      inferenceMode: "typed_edge"
+    });
+    return claims;
+  }
+
+  const whatAddress =
+    normalized.match(
+      /^what(?:\s+concern|\s+problem)?\s+did\s+(.+?)\s+address$/i
+    ) ??
+    normalized.match(
+      /^what concern did\s+(.+?)\s+address$/i
+    );
+
+  if (whatAddress) {
+    claims.push({
+      subject:
+        resolveSubjectToken(clean(whatAddress[1]), fallbackSubject),
+      predicate: "ADDRESSES",
+      object: "",
+      inferenceMode: "typed_edge"
+    });
+    return claims;
+  }
+
+  const caused =
+    normalized.match(
+      /^(.+?)\s+(?:directly\s+)?caus(?:e|ed|es)\s+(.+)$/i
+    ) ??
+    normalized.match(
+      /^(.+?)\s+(?:directly\s+)?led to\s+(.+)$/i
+    );
+
+  if (caused) {
+    claims.push({
+      subject:
+        resolveSubjectToken(clean(caused[1]), fallbackSubject),
+      predicate: "CAUSAL",
+      object: clean(caused[2]),
+      inferenceMode: "causal_extra"
+    });
+    return claims;
+  }
+
+  const introduced =
+    normalized.match(
+      /^(.+?)\s+introduced\s+(?:the\s+)?(.+?)(?:\s+feature)?$/i
+    ) ??
+    normalized.match(
+      /^(.+?)\s+introduces\s+(?:the\s+)?(.+?)(?:\s+feature)?$/i
+    ) ??
+    normalized.match(
+      /^(.+?)\s+introduce\s+(?:the\s+)?(.+?)(?:\s+feature)?$/i
     );
 
   if (introduced) {
     claims.push({
-      subject: clean(introduced[1]),
+      subject:
+        resolveSubjectToken(clean(introduced[1]), fallbackSubject),
       predicate: "INTRODUCES",
-      object: clean(introduced[2]),
+      object: cleanFeatureObject(clean(introduced[2])),
       inferenceMode: "typed_edge"
     });
+    return claims;
   }
 
   const addressed =
     normalized.match(
-      /(.+?)\s+addressed\s+(.+)/i
+      /^(.+?)\s+addressed\s+(.+)$/i
     ) ??
     normalized.match(
-      /(.+?)\s+addresses\s+(.+)/i
+      /^(.+?)\s+addresses\s+(.+)$/i
     );
 
   if (addressed) {
     claims.push({
-      subject: clean(addressed[1]),
+      subject:
+        resolveSubjectToken(clean(addressed[1]), fallbackSubject),
       predicate: "ADDRESSES",
       object: clean(addressed[2]),
       inferenceMode: "typed_edge"
     });
+    return claims;
   }
 
   const proposed =
     normalized.match(
-      /(.+?)\s+was proposed by\s+(.+)/i
+      /^(.+?)\s+was proposed by\s+(.+)$/i
     ) ??
     normalized.match(
-      /(.+?)\s+proposed by\s+(.+)/i
+      /^(.+?)\s+proposed by\s+(.+)$/i
     );
 
   if (proposed) {
@@ -354,43 +602,107 @@ function extractAtomicClaims(
       object: clean(proposed[2]),
       inferenceMode: "typed_edge"
     });
+    return claims;
   }
 
   const improves =
     normalized.match(
-      /(.+?)\s+improves?\s+(.+)/i
+      /^(.+?)\s+improves?\s+(.+)$/i
     );
 
   if (improves) {
     claims.push({
-      subject: clean(improves[1]),
+      subject:
+        resolveSubjectToken(clean(improves[1]), fallbackSubject),
       predicate: "IMPROVES",
       object: clean(improves[2]),
       inferenceMode: "causal_extra"
     });
+    return claims;
   }
 
   /*
    * Fall back to focus relationship types named by the query when no
-   * subject-verb-object claim was parsed — still conclusion-gated.
+   * subject-verb-object claim was parsed — still conclusion-gated by caller.
+   * Prefer binding a known subject so open focuses cannot float unbound.
    */
-  if (claims.length === 0) {
-    const focuses =
-      detectFocusRelationships(normalized);
+  const focuses =
+    detectFocusRelationships(normalized);
 
-    if (focuses && focuses.length > 0) {
-      for (const focus of focuses) {
-        claims.push({
-          subject: "",
-          predicate: focus,
-          object: "",
-          inferenceMode: "typed_edge"
-        });
-      }
+  if (focuses && focuses.length > 0) {
+    const subject =
+      extractLeadingSubject(normalized) ??
+      fallbackSubject ??
+      "";
+
+    /*
+     * Fail closed: do not invent unbound focus claims for compound clauses
+     * that already look like requests but failed structured parse.
+     */
+    if (!subject && /\b(?:who|what|did|cause|after|before)\b/i.test(normalized)) {
+      return claims;
+    }
+
+    for (const focus of focuses) {
+      claims.push({
+        subject,
+        predicate: focus,
+        object: "",
+        inferenceMode: "typed_edge"
+      });
     }
   }
 
   return claims;
+
+}
+
+function cleanFeatureObject(
+  value: string
+): string {
+
+  return value
+    .replace(/\s+feature$/i, "")
+    .trim();
+
+}
+
+function isPronoun(
+  value: string
+): boolean {
+
+  return /^(?:it|this|that|they|them)$/i.test(value.trim());
+
+}
+
+function resolveSubjectToken(
+  value: string,
+  fallback?: string
+): string {
+
+  const cleaned =
+    clean(value);
+
+  if (!cleaned || isPronoun(cleaned)) {
+    return fallback?.trim() ?? cleaned;
+  }
+
+  return cleaned;
+
+}
+
+function extractLeadingSubject(
+  text: string
+): string | undefined {
+
+  const pep =
+    text.match(/\bPEP[\s_-]?(\d+)\b/i);
+
+  if (pep?.[1]) {
+    return `PEP-${pep[1]}`;
+  }
+
+  return undefined;
 
 }
 
@@ -402,7 +714,8 @@ function extractPrimarySubject(
     head
       .trim()
       .replace(/^(?:why|how)\s+(?:did|does|do|is|are|was|were)\s+/i, "")
-      .replace(/^(?:why|how)\s+/i, "");
+      .replace(/^(?:why|how)\s+/i, "")
+      .replace(/^(?:did|does|do|was|were|is|are)\s+/i, "");
 
   const introduced =
     cleaned.match(
@@ -422,7 +735,7 @@ function extractPrimarySubject(
     return clean(featureObject[1]);
   }
 
-  return undefined;
+  return extractLeadingSubject(cleaned);
 
 }
 
@@ -570,6 +883,54 @@ export function contextHasTypedEdge(
     if (connects) {
       return true;
     }
+
+  }
+
+  return false;
+
+}
+
+/**
+ * True when `subject` is the relationship source (`from`) for `type`.
+ * Prevents unrelated entities with the same predicate from satisfying a claim.
+ */
+export function contextHasTypedEdgeFromSubject(
+  context: ReasoningContext,
+  subject: string,
+  type: string,
+  object?: string
+): boolean {
+
+  const endpoints =
+    listEndpoints(context);
+
+  for (const relationship of listRelationships(context)) {
+
+    if (relationship.type !== type) {
+      continue;
+    }
+
+    const from =
+      endpoints.find(entity => entity.id === relationship.from);
+
+    const to =
+      endpoints.find(entity => entity.id === relationship.to);
+
+    if (!from || !to) {
+      continue;
+    }
+
+    if (!entityMatchesPhrase(from, subject)) {
+      continue;
+    }
+
+    if (object?.trim()) {
+      if (!entityMatchesPhrase(to, object)) {
+        continue;
+      }
+    }
+
+    return true;
 
   }
 
@@ -760,6 +1121,12 @@ function evaluateClaim(
     ONTOLOGY_TYPES.has(claim.predicate)
   ) {
     const ok =
+      contextHasTypedEdgeFromSubject(
+        context,
+        claim.subject,
+        claim.predicate,
+        claim.object
+      ) ||
       contextHasTypedEdge(
         context,
         claim.subject,
@@ -773,6 +1140,33 @@ function evaluateClaim(
       reason: ok
         ? `Evidence establishes ${claim.subject} → ${claim.predicate} → ${claim.object}.`
         : `No evidence establishes ${claim.subject} → ${claim.predicate} → ${claim.object}.`
+    };
+  }
+
+  /*
+   * Open object request ("what did PEP-484 introduce?") — require the
+   * named subject to own the predicate edge. Do not accept the same
+   * predicate on an unrelated entity.
+   */
+  if (
+    claim.inferenceMode === "typed_edge" &&
+    claim.subject &&
+    !claim.object &&
+    ONTOLOGY_TYPES.has(claim.predicate)
+  ) {
+    const ok =
+      contextHasTypedEdgeFromSubject(
+        context,
+        claim.subject,
+        claim.predicate
+      );
+
+    return {
+      claim,
+      support: ok ? "SUPPORTED" : "NOT_SUPPORTED",
+      reason: ok
+        ? `Evidence establishes ${claim.subject} → ${claim.predicate} → (grounded object).`
+        : `No evidence establishes ${claim.subject} → ${claim.predicate}.`
     };
   }
 
@@ -915,6 +1309,30 @@ export function evaluateLogicalImplication(
     };
   }
 
+  return evaluateClaimsAgainstEvidence(claims, context);
+
+}
+
+/**
+ * Aggregate claim evaluations without requiring implication cue language.
+ * Used by COMPOUND verification and IMPLICATION after claim extraction.
+ */
+export function evaluateClaimsAgainstEvidence(
+  claims: LogicalClaim[],
+  context: ReasoningContext
+): ImplicationDecision {
+
+  if (claims.length === 0) {
+    return {
+      support: "NOT_SUPPORTED",
+      claims: [],
+      summary:
+        "The requested conclusion could not be mapped to an inspectable claim.",
+      established: [],
+      missing: ["CLAIM"]
+    };
+  }
+
   const evaluations =
     claims.map(claim => evaluateClaim(claim, context));
 
@@ -970,6 +1388,16 @@ export function evaluateLogicalImplication(
     established: [],
     missing
   };
+
+}
+
+/** @internal exported for compound verification tests */
+export function evaluateLogicalClaim(
+  claim: LogicalClaim,
+  context: ReasoningContext
+): ClaimEvaluation {
+
+  return evaluateClaim(claim, context);
 
 }
 

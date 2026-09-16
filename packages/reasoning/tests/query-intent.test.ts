@@ -132,7 +132,9 @@ describe("query intent classification (P2)", () => {
         "ADDRESSES"
       ])
     );
-    expect(plan.rewrittenRepresentation).toMatch(/subrequests/i);
+    expect(plan.rewrittenRepresentation).toMatch(
+      /compound claims:|subrequests:/i
+    );
 
   });
 

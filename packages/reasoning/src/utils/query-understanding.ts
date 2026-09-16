@@ -13,8 +13,13 @@ import {
 import {
   detectLogicalConclusionQuery,
   extractLogicalClaims,
+  splitIndependentClaimClauses,
   type LogicalClaim
 } from "./logical-implication.js";
+
+import {
+  ALLOWED_RELATIONSHIP_TYPES
+} from "@knowledge/shared";
 
 /**
  * Canonical query intents for KRS routing.
@@ -42,6 +47,14 @@ export interface QuerySubRequest {
    * Short inspectable label for the sub-ask.
    */
   label: string;
+  /**
+   * Subject entity for this atomic request when known.
+   */
+  subject?: string;
+  /**
+   * Object entity when the request names one.
+   */
+  object?: string;
 }
 
 export type AnalyticalOperation =
@@ -185,6 +198,30 @@ export function normalizeQueryText(
     .trim()
     .replace(/\s+/g, " ")
     .replace(/\u00a0/g, " ");
+
+}
+
+function uniqueStrings(
+  values: string[]
+): string[] {
+
+  const seen =
+    new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const key =
+      value.trim();
+
+    if (!key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(key);
+  }
+
+  return result;
 
 }
 
@@ -446,6 +483,13 @@ function detectCompoundRequest(
   focuses: string[] | undefined
 ): boolean {
 
+  const independentClauses =
+    splitIndependentClaimClauses(query);
+
+  if (independentClauses.length >= 2) {
+    return true;
+  }
+
   const whoWhatCount =
     (query.match(/\b(?:who|what|which)\b/gi) ?? []).length;
 
@@ -481,6 +525,61 @@ function detectCompoundRequest(
   return hits >= 2;
 
 }
+
+function buildSubRequests(
+  query: string,
+  focuses: string[] | undefined,
+  claims: LogicalClaim[] = []
+): QuerySubRequest[] {
+
+  const requests: QuerySubRequest[] = [];
+
+  if (claims.length > 0) {
+    for (const claim of claims) {
+      const label =
+        `${claim.subject || "?"} → ${claim.predicate} → ${claim.object || "?"}`;
+
+      requests.push({
+        ...(ONTOLOGY_TYPES.has(claim.predicate)
+          ? { focus: claim.predicate }
+          : {}),
+        label,
+        ...(claim.subject ? { subject: claim.subject } : {}),
+        ...(claim.object ? { object: claim.object } : {})
+      });
+    }
+
+    return requests;
+  }
+
+  if (focuses) {
+    for (const focus of focuses) {
+      requests.push({
+        focus,
+        label: `${focus} request`
+      });
+    }
+  }
+
+  if (
+    /\bhow (?:does|do|is|are)\b.+\b(?:relate|related|connect|connected)\b/i.test(
+      query
+    ) &&
+    !requests.some(item =>
+      item.label.includes("relate")
+    )
+  ) {
+    requests.push({
+      label: "relationship-to request"
+    });
+  }
+
+  return requests;
+
+}
+
+const ONTOLOGY_TYPES =
+  new Set<string>(ALLOWED_RELATIONSHIP_TYPES);
 
 function detectBridgeParaphrase(
   query: string
@@ -531,39 +630,6 @@ function detectConnectedParaphrase(
 
 }
 
-function buildSubRequests(
-  query: string,
-  focuses: string[] | undefined
-): QuerySubRequest[] {
-
-  const requests: QuerySubRequest[] = [];
-
-  if (focuses) {
-    for (const focus of focuses) {
-      requests.push({
-        focus,
-        label: `${focus} request`
-      });
-    }
-  }
-
-  if (
-    /\bhow (?:does|do|is|are)\b.+\b(?:relate|related|connect|connected)\b/i.test(
-      query
-    ) &&
-    !requests.some(item =>
-      item.label.includes("relate")
-    )
-  ) {
-    requests.push({
-      label: "relationship-to request"
-    });
-  }
-
-  return requests;
-
-}
-
 function buildRewrittenRepresentation(
   understanding: Omit<
     QueryUnderstanding,
@@ -610,9 +676,13 @@ function buildRewrittenRepresentation(
       ].join("; ");
 
     case "COMPOUND":
-      return understanding.subRequests.length > 0
-        ? `subrequests: ${understanding.subRequests.map(item => item.focus ?? item.label).join("; ")}`
-        : "compound multi-request";
+      return understanding.claims.length > 0
+        ? `compound claims: ${understanding.claims.map(claim =>
+            `${claim.subject || "?"} → ${claim.predicate} → ${claim.object || "?"}`
+          ).join("; ")}`
+        : understanding.subRequests.length > 0
+          ? `subrequests: ${understanding.subRequests.map(item => item.focus ?? item.label).join("; ")}`
+          : "compound multi-request";
 
     case "ANALYTICAL":
       return [
@@ -947,7 +1017,7 @@ export function understandQuery(
     detectMultiHopPathQuery(normalizedQuery);
 
   const claims =
-    intent === "IMPLICATION"
+    intent === "IMPLICATION" || intent === "COMPOUND"
       ? extractLogicalClaims(normalizedQuery)
       : [];
 
@@ -968,17 +1038,30 @@ export function understandQuery(
       claims
     );
 
+  const claimFocuses =
+    claims
+      .map(claim => claim.predicate)
+      .filter((predicate): predicate is string =>
+        ONTOLOGY_TYPES.has(predicate)
+      );
+
+  const mergedFocuses =
+    uniqueStrings([
+      ...(focuses ?? []),
+      ...claimFocuses
+    ]);
+
   const subRequests =
     intent === "COMPOUND"
-      ? buildSubRequests(normalizedQuery, focuses)
-      : focuses && focuses.length === 1
-        ? buildSubRequests(normalizedQuery, focuses)
+      ? buildSubRequests(normalizedQuery, mergedFocuses, claims)
+      : mergedFocuses.length === 1
+        ? buildSubRequests(normalizedQuery, mergedFocuses, [])
         : [];
 
   const routing =
     resolveStrategy(
       intent,
-      focuses,
+      mergedFocuses.length > 0 ? mergedFocuses : focuses,
       between,
       pathQuery,
       normalizedQuery
@@ -995,7 +1078,11 @@ export function understandQuery(
         ? { bridgeEntity: entities[2] }
         : {}),
     relationshipRequested:
-      focuses ? [...focuses] : [],
+      mergedFocuses.length > 0
+        ? mergedFocuses
+        : focuses
+          ? [...focuses]
+          : [],
     ...(between
       ? { relationshipMode: between.mode }
       : intent === "CONNECTED_RELATIONSHIP"

@@ -116,8 +116,12 @@ export {
   detectLogicalConclusionQuery,
   extractConclusionClause,
   extractLogicalClaims,
+  splitIndependentClaimClauses,
   evaluateLogicalImplication,
+  evaluateClaimsAgainstEvidence,
+  evaluateLogicalClaim,
   contextHasTypedEdge,
+  contextHasTypedEdgeFromSubject,
   formatImplicationTraceStep
 } from "./utils/logical-implication.js";
 

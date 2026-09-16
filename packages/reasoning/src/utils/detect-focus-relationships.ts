@@ -88,7 +88,12 @@ export function detectFocusRelationships(
         normalized.includes("introduced") ||
         normalized.includes("introduces")
       ) &&
-      !normalized.includes("why was")
+      !normalized.includes("why was") &&
+      /*
+       * Chronology ("introduced after") is not an INTRODUCES focus.
+       */
+      !/\bintroduced after\b/.test(normalized) &&
+      !/\bintroduce(?:d|s)? before\b/.test(normalized)
     )
   ) {
     focuses.push("INTRODUCES");
