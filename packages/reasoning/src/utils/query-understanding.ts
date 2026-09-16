@@ -185,6 +185,15 @@ export interface QueryUnderstanding {
     right: string;
   };
   /**
+   * Exact typed edge when the query names subject, predicate, and object.
+   */
+  requireTypedEdge?: {
+    subject: string;
+    predicate: string;
+    object: string;
+    direction: "outgoing" | "incoming" | "undirected";
+  };
+  /**
    * Traversal depth hint for multi-hop.
    */
   maxDepth: number;
@@ -1180,7 +1189,9 @@ export function understandQuery(
     detectMultiHopPathQuery(normalizedQuery);
 
   const claims =
-    intent === "IMPLICATION" || intent === "COMPOUND"
+    intent === "IMPLICATION" ||
+    intent === "COMPOUND" ||
+    intent === "RELATIONSHIP"
       ? extractLogicalClaims(normalizedQuery)
       : [];
 
@@ -1213,6 +1224,24 @@ export function understandQuery(
       ...(focuses ?? []),
       ...claimFocuses
     ]);
+
+  const typedEdgeClaim =
+    claims.find(claim =>
+      claim.inferenceMode === "typed_edge" &&
+      Boolean(claim.subject?.trim()) &&
+      Boolean(claim.object?.trim()) &&
+      ONTOLOGY_TYPES.has(claim.predicate)
+    );
+
+  const requireTypedEdge =
+    typedEdgeClaim
+      ? {
+          subject: typedEdgeClaim.subject,
+          predicate: typedEdgeClaim.predicate,
+          object: typedEdgeClaim.object,
+          direction: "outgoing" as const
+        }
+      : undefined;
 
   const subRequests =
     intent === "COMPOUND"
@@ -1267,6 +1296,9 @@ export function understandQuery(
           requireRelationshipBetween:
             routing.requireRelationshipBetween
         }
+      : {}),
+    ...(requireTypedEdge
+      ? { requireTypedEdge }
       : {})
   };
 

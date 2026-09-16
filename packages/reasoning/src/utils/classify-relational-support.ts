@@ -13,8 +13,13 @@ import {
 
 import {
   detectLogicalConclusionQuery,
+  evaluateClaimsAgainstEvidence,
   evaluateLogicalImplication
 } from "./logical-implication.js";
+
+import {
+  understandQuery
+} from "./query-understanding.js";
 
 export type RelationalSupportKind =
   | "not_relational"
@@ -446,6 +451,58 @@ export function classifyRelationalSupport(
           ? "DIRECT"
           : "CONNECTED"
       ]
+    };
+  }
+
+  /*
+   * Explicit subject-predicate-object relationship claims (RELATIONSHIP
+   * intent only): require exact directed typed-edge support. Same-predicate
+   * spillover is rejected. Analytical/count phrasings must not be parsed
+   * as typed-edge claims here.
+   */
+  const understanding =
+    understandQuery(query);
+
+  if (understanding.requireTypedEdge) {
+    const typed =
+      understanding.requireTypedEdge;
+
+    const decision =
+      evaluateClaimsAgainstEvidence(
+        [
+          {
+            subject: typed.subject,
+            predicate: typed.predicate,
+            object: typed.object,
+            inferenceMode: "typed_edge"
+          }
+        ],
+        context
+      );
+
+    if (decision.support === "SUPPORTED") {
+      return {
+        kind: "full",
+        established: decision.established,
+        missing: []
+      };
+    }
+
+    if (decision.support === "PARTIALLY_SUPPORTED") {
+      return {
+        kind: "partial",
+        established: decision.established,
+        missing: decision.missing
+      };
+    }
+
+    return {
+      kind: "relationship_missing",
+      established: decision.established,
+      missing:
+        decision.missing.length > 0
+          ? decision.missing
+          : [typed.predicate]
     };
   }
 

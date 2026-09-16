@@ -531,8 +531,135 @@ function reconstructBridgePath(
   return {
     nodes,
     relationships: [edgeLeft, edgeRight],
-    length: 2
+    length: 2,
+    topology: "shared_hub"
   };
+
+}
+
+/**
+ * Directed endpoint-constrained path: start at A, end at B, using only
+ * attested directed edges. Never invents a path from an unordered pool.
+ */
+function findEndpointConstrainedPath(
+  context: ReasoningContext,
+  leftPhrase: string,
+  rightPhrase: string
+): GraphPath | undefined {
+
+  const endpoints =
+    listEndpoints(context);
+
+  const relationships =
+    listRelationships(context);
+
+  const startIds =
+    endpoints
+      .filter(entity => entityMatchesPhrase(entity, leftPhrase))
+      .map(entity => entity.id);
+
+  const goalIds =
+    new Set(
+      endpoints
+        .filter(entity => entityMatchesPhrase(entity, rightPhrase))
+        .map(entity => entity.id)
+    );
+
+  if (startIds.length === 0 || goalIds.size === 0) {
+    return undefined;
+  }
+
+  const outgoing =
+    new Map<string, KnowledgeRelationship[]>();
+
+  for (const relationship of relationships) {
+    const list =
+      outgoing.get(relationship.from) ?? [];
+    list.push(relationship);
+    outgoing.set(relationship.from, list);
+  }
+
+  const entityById =
+    new Map(
+      endpoints.map(entity => [entity.id, entity])
+    );
+
+  for (const startId of startIds) {
+    if (goalIds.has(startId)) {
+      continue;
+    }
+
+    const queue: Array<{
+      id: string;
+      nodes: string[];
+      edges: KnowledgeRelationship[];
+    }> = [
+      { id: startId, nodes: [startId], edges: [] }
+    ];
+
+    const visited =
+      new Set<string>([startId]);
+
+    while (queue.length > 0) {
+      const current =
+        queue.shift()!;
+
+      for (const edge of outgoing.get(current.id) ?? []) {
+        if (visited.has(edge.to)) {
+          continue;
+        }
+
+        const nextNodes =
+          [...current.nodes, edge.to];
+
+        const nextEdges =
+          [...current.edges, edge];
+
+        if (goalIds.has(edge.to)) {
+          const nodes: KnowledgeEntity[] =
+            nextNodes.map(id => {
+              const ref =
+                entityById.get(id);
+
+              return {
+                id,
+                type:
+                  ref &&
+                  "type" in ref &&
+                  typeof (ref as KnowledgeEntity).type === "string"
+                    ? (ref as KnowledgeEntity).type
+                    : "Entity",
+                label: ref?.label ?? id,
+                source: ref?.source ?? "",
+                confidence:
+                  ref &&
+                  "confidence" in ref &&
+                  typeof (ref as KnowledgeEntity).confidence === "number"
+                    ? (ref as KnowledgeEntity).confidence
+                    : 1,
+                properties: ref?.properties ?? {}
+              };
+            });
+
+          return {
+            nodes,
+            relationships: nextEdges,
+            length: nextEdges.length,
+            topology: "directed_chain"
+          };
+        }
+
+        visited.add(edge.to);
+        queue.push({
+          id: edge.to,
+          nodes: nextNodes,
+          edges: nextEdges
+        });
+      }
+    }
+  }
+
+  return undefined;
 
 }
 
@@ -561,6 +688,149 @@ export function interpretEvidencePaths(
 
   const relationshipTypes =
     relationships.map(item => item.type);
+
+  const typedEdge =
+    resolved?.requireTypedEdge ??
+    (() => {
+      const claim =
+        resolved?.claims?.find(item =>
+          item.inferenceMode === "typed_edge" &&
+          Boolean(item.subject?.trim()) &&
+          Boolean(item.object?.trim())
+        );
+
+      if (!claim) {
+        return undefined;
+      }
+
+      return {
+        subject: claim.subject,
+        predicate: claim.predicate,
+        object: claim.object,
+        direction: "outgoing" as const
+      };
+    })();
+
+  /*
+   * Exact subject-predicate-object(+direction) relationship claims.
+   */
+  if (typedEdge && !between) {
+    const match =
+      relationships.find(item => {
+        const endpoints =
+          listEndpoints(context);
+
+        const from =
+          endpoints.find(entity => entity.id === item.from);
+
+        const to =
+          endpoints.find(entity => entity.id === item.to);
+
+        if (!from || !to) {
+          return false;
+        }
+
+        if (item.type !== typedEdge.predicate) {
+          return false;
+        }
+
+        if (typedEdge.direction === "incoming") {
+          return (
+            entityMatchesPhrase(to, typedEdge.subject) &&
+            entityMatchesPhrase(from, typedEdge.object)
+          );
+        }
+
+        if (typedEdge.direction === "undirected") {
+          return (
+            (
+              entityMatchesPhrase(from, typedEdge.subject) &&
+              entityMatchesPhrase(to, typedEdge.object)
+            ) ||
+            (
+              entityMatchesPhrase(from, typedEdge.object) &&
+              entityMatchesPhrase(to, typedEdge.subject)
+            )
+          );
+        }
+
+        return (
+          entityMatchesPhrase(from, typedEdge.subject) &&
+          entityMatchesPhrase(to, typedEdge.object)
+        );
+      });
+
+    if (!match) {
+      return {
+        kind: "INSUFFICIENT",
+        sourceEntity: typedEdge.subject,
+        targetEntity: typedEdge.object,
+        bridgeEntities: [],
+        relationships: [],
+        hopCount: 0,
+        supportsClaim: false,
+        explanation:
+          `No evidence establishes ${typedEdge.subject} → ${typedEdge.predicate} → ${typedEdge.object}.`
+      };
+    }
+
+    const endpoints =
+      listEndpoints(context);
+
+    const from =
+      endpoints.find(entity => entity.id === match.from);
+
+    const to =
+      endpoints.find(entity => entity.id === match.to);
+
+    const path: GraphPath | undefined =
+      from && to
+        ? {
+            nodes: [
+              {
+                id: from.id,
+                type:
+                  "type" in from &&
+                  typeof (from as KnowledgeEntity).type === "string"
+                    ? (from as KnowledgeEntity).type
+                    : "Entity",
+                label: from.label,
+                source: from.source,
+                confidence: 1,
+                properties: from.properties ?? {}
+              },
+              {
+                id: to.id,
+                type:
+                  "type" in to &&
+                  typeof (to as KnowledgeEntity).type === "string"
+                    ? (to as KnowledgeEntity).type
+                    : "Entity",
+                label: to.label,
+                source: to.source,
+                confidence: 1,
+                properties: to.properties ?? {}
+              }
+            ],
+            relationships: [match],
+            length: 1,
+            topology: "directed_chain"
+          }
+        : undefined;
+
+    return {
+      kind: "DIRECT",
+      sourceEntity: typedEdge.subject,
+      targetEntity: typedEdge.object,
+      bridgeEntities: [],
+      relationships: [match.type],
+      hopCount: 1,
+      supportsClaim: true,
+      explanation:
+        `Direct relationship ${match.type} establishes ${typedEdge.subject} → ${typedEdge.object}.`,
+      ...(path ? { path } : {})
+    };
+  }
 
   if (
     !between &&
@@ -597,7 +867,7 @@ export function interpretEvidencePaths(
     return {
       kind: "INSUFFICIENT",
       bridgeEntities: [],
-      relationships: relationshipTypes,
+      relationships: [],
       hopCount: 0,
       supportsClaim: false,
       explanation:
@@ -638,7 +908,8 @@ export function interpretEvidencePaths(
               )
             );
           }),
-          length: 1
+          length: 1,
+          topology: "directed_chain"
         },
         { between, intent, query }
       );
@@ -686,20 +957,63 @@ export function interpretEvidencePaths(
       kind: "INSUFFICIENT",
       sourceEntity: between.left,
       targetEntity: between.right,
-      bridgeEntities: bridgeLabels,
-      relationships: relationshipTypes,
-      hopCount: hasBridge ? 2 : 0,
+      bridgeEntities: [],
+      relationships: [],
+      hopCount: 0,
       supportsClaim: false,
       explanation:
         hasBridge
           ? `Only an indirect connection exists via ${bridgeLabels.join(", ") || "an intermediate"}; direct relationship not established.`
-          : `No direct relationship between ${between.left} and ${between.right}.`,
-      ...(bridgeIds[0]
-        ? {
-            path:
-              reconstructBridgePath(context, between, bridgeIds[0])
-          }
-        : {})
+          : `No direct relationship between ${between.left} and ${between.right}.`
+    };
+  }
+
+  /*
+   * Prefer a real directed endpoint-to-endpoint chain when available.
+   */
+  const connectedPath =
+    findEndpointConstrainedPath(
+      context,
+      between.left,
+      between.right
+    ) ??
+    findEndpointConstrainedPath(
+      context,
+      between.right,
+      between.left
+    );
+
+  if (
+    connectedPath &&
+    connectedPath.length > 0 &&
+    between.mode !== "bridge"
+  ) {
+    const interpretation =
+      interpretGraphPath(connectedPath, {
+        between,
+        intent,
+        query
+      });
+
+    return {
+      ...interpretation,
+      kind:
+        connectedPath.length === 1
+          ? "DIRECT"
+          : connectedPath.length === 2
+            ? "CONNECTED"
+            : "MULTI_HOP",
+      sourceEntity: between.left,
+      targetEntity: between.right,
+      relationships:
+        connectedPath.relationships.map(item => item.type),
+      hopCount: connectedPath.length,
+      supportsClaim: true,
+      path: connectedPath,
+      explanation:
+        connectedPath.length === 1
+          ? `Direct relationship establishes ${between.left} ↔ ${between.right}.`
+          : `Endpoint-constrained path connects ${between.left} to ${between.right}.`
     };
   }
 
@@ -707,25 +1021,33 @@ export function interpretEvidencePaths(
     const path =
       reconstructBridgePath(context, between, bridgeIds[0]);
 
+    if (!path) {
+      return {
+        kind: "INSUFFICIENT",
+        sourceEntity: between.left,
+        targetEntity: between.right,
+        bridgeEntities: [],
+        relationships: [],
+        hopCount: 0,
+        supportsClaim: false,
+        explanation:
+          `Shared-hub bridge between ${between.left} and ${between.right} could not be reconstructed from attested edges.`
+      };
+    }
+
     const kind: PathInterpretationKind =
-      between.mode === "bridge" || intent === "BRIDGE_RELATIONSHIP"
-        ? "BRIDGE"
-        : path && path.length > 2
-          ? "MULTI_HOP"
-          : "CONNECTED";
+      "BRIDGE";
 
     return {
       kind,
       sourceEntity: between.left,
       targetEntity: between.right,
       bridgeEntities: bridgeLabels,
-      relationships: path?.relationships.map(item => item.type) ?? relationshipTypes,
-      hopCount: path?.length ?? 2,
+      relationships: path.relationships.map(item => item.type),
+      hopCount: path.length,
       supportsClaim: true,
       explanation:
-        kind === "BRIDGE"
-          ? `Bridge path connects ${between.left} and ${between.right} through ${bridgeLabels.join(", ")}.`
-          : `Connected path links ${between.left} and ${between.right} via ${bridgeLabels.join(", ")}.`,
+        `Bridge path connects ${between.left} and ${between.right} through ${bridgeLabels.join(", ")}.`,
       path
     };
   }
@@ -734,8 +1056,8 @@ export function interpretEvidencePaths(
     kind: "INSUFFICIENT",
     sourceEntity: between.left,
     targetEntity: between.right,
-    bridgeEntities: between.bridge ? [between.bridge] : [],
-    relationships: relationshipTypes,
+    bridgeEntities: [],
+    relationships: [],
     hopCount: 0,
     supportsClaim: false,
     explanation:

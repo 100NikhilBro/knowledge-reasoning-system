@@ -42,6 +42,104 @@ function toPath(
 
 }
 
+function relationshipKey(
+  relationship: KnowledgeRelationship
+): string {
+
+  return (
+    `${relationship.from}|${relationship.type}|${relationship.to}`
+  );
+
+}
+
+function hitsHaveRelationship(
+  hits: TraversalHit[],
+  entityId: string,
+  relationship: KnowledgeRelationship
+): boolean {
+
+  const key =
+    relationshipKey(relationship);
+
+  return hits.some(hit =>
+    hit.entity.id === entityId &&
+    hit.relationship !== undefined &&
+    relationshipKey(hit.relationship) === key
+  );
+
+}
+
+/**
+ * Preserve every independent real edge, including multiple inbound edges
+ * to the same hub (A→X and B→X).
+ */
+function attachIndependentRelationship(
+  hits: TraversalHit[],
+  entity: KnowledgeEntity,
+  relationship: KnowledgeRelationship,
+  fromEntity: KnowledgeEntity,
+  depth: number
+): void {
+
+  if (hitsHaveRelationship(hits, entity.id, relationship)) {
+    return;
+  }
+
+  const existingEmpty =
+    hits.find(hit =>
+      hit.entity.id === entity.id &&
+      hit.relationship === undefined
+    );
+
+  if (existingEmpty) {
+    existingEmpty.relationship = relationship;
+    existingEmpty.path = toPath(
+      [fromEntity, existingEmpty.entity],
+      [relationship]
+    );
+    return;
+  }
+
+  const propagated =
+    buildPropagatedConfidence(depth);
+
+  hits.push({
+    entity: {
+      ...entity,
+      confidence: propagated.confidence
+    },
+    depth,
+    relationship,
+    path: toPath(
+      [fromEntity, entity],
+      [relationship]
+    )
+  });
+
+}
+
+function attachRelationshipIfMissing(
+  hits: TraversalHit[],
+  entityId: string,
+  relationship: KnowledgeRelationship,
+  fromEntity: KnowledgeEntity
+): void {
+
+  const existing =
+    hits.find(hit => hit.entity.id === entityId);
+
+  if (!existing || existing.relationship !== undefined) {
+    return;
+  }
+
+  existing.relationship = relationship;
+  existing.path = toPath(
+    [fromEntity, existing.entity],
+    [relationship]
+  );
+
+}
+
 /**
  * Depth-first traversal that retains real GraphNeighbor relationships
  * and reconstructible GraphPath provenance per discovered node.
@@ -122,43 +220,37 @@ implements GraphTraversal {
     if (visited.has(node.id)) {
       /*
        * Co-seeded endpoints are marked visited at depth 0 without an edge.
-       * If a later path discovers a real inbound relationship, attach it
-       * on both the already-visited node and the predecessor when present.
+       * Later discoveries of independent real edges (including a second
+       * shared-hub branch A→X and B→X) must still be preserved.
        */
       if (inbound !== undefined) {
-        const existing =
-          result.find(hit => hit.entity.id === node.id);
+        const predecessor =
+          pathNodes[pathNodes.length - 2] ?? node;
 
-        if (
-          existing &&
-          existing.relationship === undefined
-        ) {
-          existing.relationship = inbound;
-          existing.path = toPath(
-            [pathNodes[pathNodes.length - 2] ?? node, existing.entity],
-            [inbound]
+        if (inbound.to === node.id) {
+          attachIndependentRelationship(
+            result,
+            node,
+            inbound,
+            predecessor,
+            depth
+          );
+        } else {
+          attachRelationshipIfMissing(
+            result,
+            node.id,
+            inbound,
+            predecessor
           );
         }
 
-        const predecessor =
-          pathNodes[pathNodes.length - 2];
-
-        if (predecessor) {
-          const prior =
-            result.find(
-              hit => hit.entity.id === predecessor.id
-            );
-
-          if (
-            prior &&
-            prior.relationship === undefined
-          ) {
-            prior.relationship = inbound;
-            prior.path = toPath(
-              [predecessor, node],
-              [inbound]
-            );
-          }
+        if (predecessor.id !== node.id) {
+          attachRelationshipIfMissing(
+            result,
+            predecessor.id,
+            inbound,
+            predecessor
+          );
         }
       }
       return;

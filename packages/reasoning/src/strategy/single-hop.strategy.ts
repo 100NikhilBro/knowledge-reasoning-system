@@ -1,6 +1,7 @@
 import type {
   Evidence,
   EvidenceSet,
+  KnowledgeRelationship,
   ReasoningPlan
 } from "@knowledge/shared";
 
@@ -54,6 +55,136 @@ function entityMatchesEndpoint(
 
 }
 
+function edgeKey(
+  entityId: string,
+  relationship: KnowledgeRelationship
+): string {
+
+  return (
+    `${relationship.from}|${relationship.type}|${relationship.to}|${entityId}`
+  );
+
+}
+
+function endpointById(
+  byId: Map<string, Evidence>,
+  id: string
+): Evidence["entity"] | undefined {
+
+  return byId.get(id)?.entity;
+
+}
+
+/**
+ * Exact subject-predicate-object(+direction) match for typed-edge asks.
+ */
+function relationshipMatchesTypedEdge(
+  relationship: KnowledgeRelationship,
+  typedEdge: NonNullable<ReasoningPlan["requireTypedEdge"]>,
+  byId: Map<string, Evidence>
+): boolean {
+
+  if (relationship.type !== typedEdge.predicate) {
+    return false;
+  }
+
+  const from =
+    endpointById(byId, relationship.from);
+
+  const to =
+    endpointById(byId, relationship.to);
+
+  if (!from || !to) {
+    /*
+     * Fall back to id/phrase matching against relationship endpoints
+     * when endpoint entities are not yet indexed in byId.
+     */
+    const fromRef =
+      { id: relationship.from, label: relationship.from, source: "", properties: {} };
+
+    const toRef =
+      { id: relationship.to, label: relationship.to, source: "", properties: {} };
+
+    if (typedEdge.direction === "incoming") {
+      return (
+        entityMatchesPhrase(toRef, typedEdge.subject) &&
+        entityMatchesPhrase(fromRef, typedEdge.object)
+      );
+    }
+
+    if (typedEdge.direction === "undirected") {
+      return (
+        (
+          entityMatchesPhrase(fromRef, typedEdge.subject) &&
+          entityMatchesPhrase(toRef, typedEdge.object)
+        ) ||
+        (
+          entityMatchesPhrase(fromRef, typedEdge.object) &&
+          entityMatchesPhrase(toRef, typedEdge.subject)
+        )
+      );
+    }
+
+    return (
+      entityMatchesPhrase(fromRef, typedEdge.subject) &&
+      entityMatchesPhrase(toRef, typedEdge.object)
+    );
+  }
+
+  if (typedEdge.direction === "incoming") {
+    return (
+      entityMatchesPhrase(to, typedEdge.subject) &&
+      entityMatchesPhrase(from, typedEdge.object)
+    );
+  }
+
+  if (typedEdge.direction === "undirected") {
+    return (
+      (
+        entityMatchesPhrase(from, typedEdge.subject) &&
+        entityMatchesPhrase(to, typedEdge.object)
+      ) ||
+      (
+        entityMatchesPhrase(from, typedEdge.object) &&
+        entityMatchesPhrase(to, typedEdge.subject)
+      )
+    );
+  }
+
+  return (
+    entityMatchesPhrase(from, typedEdge.subject) &&
+    entityMatchesPhrase(to, typedEdge.object)
+  );
+
+}
+
+function dedupeEvidenceRows(
+  rows: Evidence[]
+): Evidence[] {
+
+  const seen =
+    new Set<string>();
+
+  const out: Evidence[] = [];
+
+  for (const item of rows) {
+    const key =
+      item.relationship
+        ? edgeKey(item.entity.id, item.relationship)
+        : `entity:${item.entity.id}`;
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    out.push(item);
+  }
+
+  return out;
+
+}
+
 /**
  * Default path: pass collected evidence through unchanged.
  *
@@ -61,6 +192,9 @@ function entityMatchesEndpoint(
  * types from seeds and from newly reached neighbors (bounded second pass)
  * so compound chains like INTRODUCES → ADDRESSES can be grounded without
  * dumping unrelated neighbors.
+ *
+ * When requireTypedEdge is set, only retain edges matching subject +
+ * predicate + object + direction.
  *
  * When requireRelationshipBetween is set, only retain an edge whose
  * endpoints match both query phrases; otherwise return empty evidence.
@@ -96,11 +230,27 @@ implements ReasoningStrategy {
     const focusSet =
       new Set(focus);
 
+    const typedEdge =
+      plan.requireTypedEdge;
+
     const byId =
+      new Map<string, Evidence>();
+
+    /*
+     * Edge-keyed rows so independent hub branches (A→X, B→X) are not
+     * collapsed when collecting focused neighbors.
+     */
+    const byEdge =
       new Map<string, Evidence>();
 
     for (const item of evidence.evidence) {
       byId.set(item.entity.id, item);
+      if (item.relationship) {
+        byEdge.set(
+          edgeKey(item.entity.id, item.relationship),
+          item
+        );
+      }
     }
 
     const seedIds =
@@ -115,7 +265,9 @@ implements ReasoningStrategy {
         graph,
         focusSet,
         byId,
-        [...seedIds]
+        byEdge,
+        [...seedIds],
+        typedEdge
       );
 
     /*
@@ -123,7 +275,7 @@ implements ReasoningStrategy {
      * focused types can be collected (e.g. Feature --ADDRESSES--> Concern
      * after Proposal --INTRODUCES--> Feature).
      */
-    if (focusedHit) {
+    if (focusedHit && !typedEdge) {
       const frontier =
         [...byId.keys()].filter(
           id => !seedIds.has(id)
@@ -134,7 +286,9 @@ implements ReasoningStrategy {
           graph,
           focusSet,
           byId,
-          frontier
+          byEdge,
+          frontier,
+          typedEdge
         );
 
       focusedHit =
@@ -158,10 +312,13 @@ implements ReasoningStrategy {
       };
     }
 
+    const focusedEvidence =
+      [...byEdge.values()];
+
     const focusedIds =
       new Set<string>();
 
-    for (const item of byId.values()) {
+    for (const item of focusedEvidence) {
       if (
         item.relationship &&
         focusSet.has(item.relationship.type)
@@ -172,12 +329,88 @@ implements ReasoningStrategy {
       }
     }
 
-    const focusedEvidence =
-      [...byId.values()].filter(item =>
-        focusedIds.has(item.entity.id)
+    /*
+     * Exact typed-edge asks: retain only matching edges (and their
+     * endpoints). Same-predicate spillover objects are excluded.
+     */
+    if (typedEdge) {
+      const matching =
+        focusedEvidence.filter(item =>
+          item.relationship &&
+          relationshipMatchesTypedEdge(
+            item.relationship,
+            typedEdge,
+            byId
+          )
+        );
+
+      if (matching.length === 0) {
+        return {
+          evidence: evidence.evidence.map(item => ({
+            entity: item.entity,
+            score: item.score,
+            source: item.source,
+            ...(item.metadata
+              ? { metadata: item.metadata }
+              : {})
+          }))
+        };
+      }
+
+      const retainIds =
+        new Set<string>();
+
+      for (const item of matching) {
+        retainIds.add(item.entity.id);
+        if (item.relationship) {
+          retainIds.add(item.relationship.from);
+          retainIds.add(item.relationship.to);
+        }
+      }
+
+      const endpoints =
+        evidence.evidence.filter(item =>
+          retainIds.has(item.entity.id) && !item.relationship
+        );
+
+      return {
+        evidence: dedupeEvidenceRows([
+          ...matching,
+          ...endpoints
+        ])
+      };
+    }
+
+    /*
+     * Prefer edge-bearing neighbor rows; keep bare endpoint seeds that are
+     * not already represented as an edge entity row.
+     */
+    const edgeRows =
+      focusedEvidence.filter(item =>
+        item.relationship &&
+        focusSet.has(item.relationship.type)
       );
 
-    focusedEvidence.sort((a, b) => {
+    const edgeEntityIds =
+      new Set(edgeRows.map(item => item.entity.id));
+
+    const bareEndpoints: Evidence[] =
+      [...byId.values()].filter(item =>
+        focusedIds.has(item.entity.id) &&
+        !edgeEntityIds.has(item.entity.id)
+      ).map(item => ({
+        entity: item.entity,
+        score: item.score,
+        source: item.source,
+        ...(item.metadata
+          ? { metadata: item.metadata }
+          : {})
+      }));
+
+    const ordered: Evidence[] =
+      [...bareEndpoints, ...edgeRows];
+
+    ordered.sort((a, b) => {
       const aFocused =
         a.relationship &&
         focusSet.has(a.relationship.type)
@@ -199,7 +432,7 @@ implements ReasoningStrategy {
     });
 
     return {
-      evidence: focusedEvidence
+      evidence: dedupeEvidenceRows(ordered)
     };
 
   }
@@ -212,7 +445,11 @@ implements ReasoningStrategy {
 
     byId: Map<string, Evidence>,
 
-    fromIds: string[]
+    byEdge: Map<string, Evidence>,
+
+    fromIds: string[],
+
+    typedEdge: ReasoningPlan["requireTypedEdge"]
 
   ): Promise<boolean> {
 
@@ -243,40 +480,55 @@ implements ReasoningStrategy {
           continue;
         }
 
-        focusedHit = true;
-
-        const existing =
-          byId.get(neighbor.neighbor.id);
-
         /*
-         * Prefer keeping an existing focused relationship over overwriting
-         * with a later edge of a different type.
+         * Index the neighbor endpoint so typed-edge object matching can
+         * resolve target phrases against real entity labels/ids.
          */
+        if (!byId.has(neighbor.neighbor.id)) {
+          byId.set(neighbor.neighbor.id, {
+            entity: neighbor.neighbor,
+            score: Math.max(item.score, 0.95),
+            source: "graph"
+          });
+        }
+
         if (
-          existing?.relationship &&
-          focusSet.has(existing.relationship.type)
+          typedEdge &&
+          !relationshipMatchesTypedEdge(
+            neighbor.relationship,
+            typedEdge,
+            byId
+          )
         ) {
           continue;
         }
 
+        focusedHit = true;
+
+        const key =
+          edgeKey(
+            neighbor.neighbor.id,
+            neighbor.relationship
+          );
+
+        const existingEdge =
+          byEdge.get(key);
+
         const focusedItem: Evidence = {
           entity: neighbor.neighbor,
           score: Math.max(
-            existing?.score ?? 0,
+            existingEdge?.score ?? 0,
             item.score,
             0.95
           ),
           source: "graph",
           relationship: neighbor.relationship,
-          ...(existing?.metadata
-            ? { metadata: existing.metadata }
+          ...(existingEdge?.metadata
+            ? { metadata: existingEdge.metadata }
             : {})
         };
 
-        byId.set(
-          neighbor.neighbor.id,
-          focusedItem
-        );
+        byEdge.set(key, focusedItem);
 
         if (!byId.has(item.entity.id)) {
           byId.set(item.entity.id, item);
@@ -396,29 +648,10 @@ implements ReasoningStrategy {
       };
     }
 
-    // Deterministic dedupe by entity id (keep first / higher score).
-    const byId =
-      new Map<string, Evidence>();
-
-    for (const item of grounded) {
-      const existing =
-        byId.get(item.entity.id);
-
-      if (
-        !existing ||
-        item.score > existing.score
-      ) {
-        byId.set(item.entity.id, item);
-      }
-    }
-
-    const ordered =
-      [...byId.values()].sort((a, b) =>
-        a.entity.id.localeCompare(b.entity.id)
-      );
-
     return {
-      evidence: ordered
+      evidence: dedupeEvidenceRows(grounded).sort((a, b) =>
+        a.entity.id.localeCompare(b.entity.id)
+      )
     };
 
   }

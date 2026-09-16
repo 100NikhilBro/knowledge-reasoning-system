@@ -9,4 +9,10 @@ export interface GraphPath {
 
   length: number;
 
+  /**
+   * When set to shared_hub, relationships are independent spokes to/from
+   * the hub node rather than a single directed chain.
+   */
+  topology?: "directed_chain" | "shared_hub";
+
 }

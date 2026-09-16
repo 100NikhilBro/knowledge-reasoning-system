@@ -58,6 +58,11 @@ implements ReasoningPlanner {
         understanding.bridgeEntity;
     }
 
+    if (understanding.requireTypedEdge) {
+      plan.requireTypedEdge =
+        understanding.requireTypedEdge;
+    }
+
     return plan;
 
   }

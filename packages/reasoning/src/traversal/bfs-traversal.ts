@@ -46,6 +46,16 @@ interface QueueItem {
 
 }
 
+function relationshipKey(
+  relationship: KnowledgeRelationship
+): string {
+
+  return (
+    `${relationship.from}|${relationship.type}|${relationship.to}`
+  );
+
+}
+
 function toPath(
   nodes: KnowledgeEntity[],
   relationships: KnowledgeRelationship[]
@@ -92,6 +102,23 @@ function toHit(
 
 }
 
+function hitsHaveRelationship(
+  hits: TraversalHit[],
+  entityId: string,
+  relationship: KnowledgeRelationship
+): boolean {
+
+  const key =
+    relationshipKey(relationship);
+
+  return hits.some(hit =>
+    hit.entity.id === entityId &&
+    hit.relationship !== undefined &&
+    relationshipKey(hit.relationship) === key
+  );
+
+}
+
 /**
  * When retrieval already seeded both endpoints, BFS visits them at depth 0
  * without edges. Later neighbor discovery must still attach the real
@@ -116,6 +143,55 @@ function attachRelationshipIfMissing(
     [fromEntity, existing.entity],
     [relationship]
   );
+
+}
+
+/**
+ * Preserve every independent real edge on the neighbor/hub, including
+ * multiple inbound edges to the same hub (A→X and B→X).
+ */
+function attachIndependentRelationship(
+  hits: TraversalHit[],
+  entity: KnowledgeEntity,
+  relationship: KnowledgeRelationship,
+  fromEntity: KnowledgeEntity,
+  depth: number
+): void {
+
+  if (hitsHaveRelationship(hits, entity.id, relationship)) {
+    return;
+  }
+
+  const existingEmpty =
+    hits.find(hit =>
+      hit.entity.id === entity.id &&
+      hit.relationship === undefined
+    );
+
+  if (existingEmpty) {
+    existingEmpty.relationship = relationship;
+    existingEmpty.path = toPath(
+      [fromEntity, existingEmpty.entity],
+      [relationship]
+    );
+    return;
+  }
+
+  const propagated =
+    buildPropagatedConfidence(depth);
+
+  hits.push({
+    entity: {
+      ...entity,
+      confidence: propagated.confidence
+    },
+    depth,
+    relationship,
+    path: toPath(
+      [fromEntity, entity],
+      [relationship]
+    )
+  });
 
 }
 
@@ -151,7 +227,14 @@ implements GraphTraversal {
       evidence.evidence.map(item => ({
         entity: item.entity,
         depth: 0,
+        ...(item.relationship
+          ? { relationship: item.relationship }
+          : {}),
         pathNodes: [item.entity],
+        /*
+         * Seed relationships are edge provenance, not a discovered path.
+         * Path reconstruction happens when an edge is walked.
+         */
         pathRelationships: []
       }));
 
@@ -172,6 +255,22 @@ implements GraphTraversal {
           queue.shift()!;
 
         if (visited.has(current.entity.id)) {
+          /*
+           * Co-seed revisit: still preserve an independent inbound edge
+           * discovered later (shared-hub second branch).
+           */
+          if (current.relationship) {
+            const predecessor =
+              current.pathNodes[current.pathNodes.length - 2];
+
+            attachIndependentRelationship(
+              result,
+              current.entity,
+              current.relationship,
+              predecessor ?? current.entity,
+              current.depth
+            );
+          }
           continue;
         }
 
@@ -195,16 +294,30 @@ implements GraphTraversal {
         for (const neighbor of neighbors) {
 
           if (visited.has(neighbor.neighbor.id)) {
-            attachRelationshipIfMissing(
-              result,
-              neighbor.neighbor.id,
-              neighbor.relationship,
-              current.entity
-            );
             /*
-             * Also attach on the current node when the neighbor was a
-             * co-seed: otherwise the outbound edge is lost forever.
+             * Shared-hub: multiple independent edges may terminate at the
+             * same already-visited neighbor. Reverse/co-seed lookups that
+             * rediscover an edge whose source is the neighbor must not
+             * stack a second relationship onto that source entity.
              */
+            if (
+              neighbor.relationship.to === neighbor.neighbor.id
+            ) {
+              attachIndependentRelationship(
+                result,
+                neighbor.neighbor,
+                neighbor.relationship,
+                current.entity,
+                current.depth + 1
+              );
+            } else {
+              attachRelationshipIfMissing(
+                result,
+                neighbor.neighbor.id,
+                neighbor.relationship,
+                current.entity
+              );
+            }
             attachRelationshipIfMissing(
               result,
               current.entity.id,

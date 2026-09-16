@@ -122,7 +122,7 @@ export function detectLogicalConclusionQuery(
   if (
     /\b(?:why|how)\b/i.test(normalized) &&
     /\b(?:introduce|introduced|introduces)\b/i.test(normalized) &&
-    /\bto\s+(?:improve|increase|reduce|help|enable|allow)\b/i.test(normalized)
+    /\bto\s+(?:improve|increase|reduce|help|enable|allow|make)\b/i.test(normalized)
   ) {
     return true;
   }
@@ -295,7 +295,7 @@ export function extractLogicalClaims(
 
     const causalTail =
       segment.match(
-        /^(.+?)\s+to\s+(improve|increase|reduce|help|enable|allow)\s+(.+)$/i
+        /^(.+?)\s+to\s+(improve|increase|reduce|help|enable|allow|make)\s+(.+)$/i
       );
 
     if (causalTail) {
@@ -600,6 +600,25 @@ function extractAtomicClaims(
       subject: clean(proposed[1]),
       predicate: "PROPOSED_BY",
       object: clean(proposed[2]),
+      inferenceMode: "typed_edge"
+    });
+    return claims;
+  }
+
+  const resultsIn =
+    normalized.match(
+      /^(.+?)\s+results?\s+in\s+(.+)$/i
+    ) ??
+    normalized.match(
+      /^(.+?)\s+resulted\s+in\s+(.+)$/i
+    );
+
+  if (resultsIn) {
+    claims.push({
+      subject:
+        resolveSubjectToken(clean(resultsIn[1]), fallbackSubject),
+      predicate: "RESULTS_IN",
+      object: clean(resultsIn[2]),
       inferenceMode: "typed_edge"
     });
     return claims;
@@ -1126,12 +1145,6 @@ function evaluateClaim(
         claim.subject,
         claim.predicate,
         claim.object
-      ) ||
-      contextHasTypedEdge(
-        context,
-        claim.subject,
-        claim.object,
-        claim.predicate
       );
 
     return {

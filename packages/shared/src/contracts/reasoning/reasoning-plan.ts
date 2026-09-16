@@ -63,6 +63,17 @@ export interface ReasoningPlan {
   bridgeEntity?: string;
 
   /**
+   * Exact typed edge required for RELATIONSHIP asks with an explicit object.
+   * source --predicate--> target must match; same-predicate spillover is rejected.
+   */
+  requireTypedEdge?: {
+    subject: string;
+    predicate: string;
+    object: string;
+    direction: "outgoing" | "incoming" | "undirected";
+  };
+
+  /**
    * Canonical query intent from P2 understanding (routing metadata).
    */
   intent?: string;

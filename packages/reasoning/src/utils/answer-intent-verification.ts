@@ -1015,6 +1015,74 @@ export function verifyAnswerAgainstIntent(
   }
 
   /*
+   * Exact typed-edge RELATIONSHIP asks: subject + predicate + object + direction.
+   */
+  if (
+    understanding.intent === "RELATIONSHIP" &&
+    understanding.claims.some(claim =>
+      claim.inferenceMode === "typed_edge" &&
+      Boolean(claim.subject?.trim()) &&
+      Boolean(claim.object?.trim())
+    )
+  ) {
+
+    const typedClaims =
+      understanding.claims.filter(claim =>
+        claim.inferenceMode === "typed_edge" &&
+        Boolean(claim.subject?.trim()) &&
+        Boolean(claim.object?.trim())
+      ) as LogicalClaim[];
+
+    const decision =
+      evaluateClaimsAgainstEvidence(
+        typedClaims,
+        context
+      );
+
+    for (const evaluation of decision.claims) {
+      claims.push({
+        subject: evaluation.claim.subject,
+        predicate: evaluation.claim.predicate,
+        object: evaluation.claim.object,
+        status:
+          evaluation.support === "SUPPORTED"
+            ? "SUPPORTED"
+            : "NOT_SUPPORTED"
+      });
+    }
+
+    if (decision.support === "SUPPORTED") {
+      status = "SUPPORTED";
+    } else if (decision.support === "PARTIALLY_SUPPORTED") {
+      status = "PARTIALLY_SUPPORTED";
+      matchesIntent = false;
+      reasons.push(
+        "Only part of the requested relationship claim is established"
+      );
+      traceLines.push(
+        "Verification: typed relationship claim partially supported"
+      );
+    } else {
+      status = "NOT_SUPPORTED";
+
+      if (
+        !answerBoundsUnsupported(answer) &&
+        answer.trim().length > 0
+      ) {
+        matchesIntent = false;
+        exceedsEvidence = true;
+        reasons.push(
+          "Answer asserts a typed relationship that is not established"
+        );
+        traceLines.push(
+          "Verification: typed relationship claim not supported"
+        );
+      }
+    }
+
+  }
+
+  /*
    * Direct relationship: shared-hub connectivity language is a mismatch.
    */
   if (understanding.intent === "DIRECT_RELATIONSHIP") {
@@ -1091,7 +1159,10 @@ export function verifyAnswerAgainstIntent(
       between?.bridge ??
       understanding.bridgeEntity;
 
-    if (relational.kind === "full") {
+    const pathOk =
+      relational.kind === "full";
+
+    if (pathOk) {
       status = "SUPPORTED";
 
       const leftOk =
@@ -1157,6 +1228,21 @@ export function verifyAnswerAgainstIntent(
             : "CONNECTED",
         status: "NOT_SUPPORTED"
       });
+
+      if (
+        !answerBoundsUnsupported(answer) &&
+        answer.trim().length > 0 &&
+        /\b(?:connected|bridge|related|through|via)\b/i.test(answer)
+      ) {
+        matchesIntent = false;
+        exceedsEvidence = true;
+        reasons.push(
+          "Answer asserts connected/bridge topology that is not established"
+        );
+        traceLines.push(
+          "Verification: connected/bridge path not established"
+        );
+      }
     }
 
   }
