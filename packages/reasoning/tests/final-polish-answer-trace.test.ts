@@ -108,7 +108,7 @@ describe("final polish: answer format, attribution, trace", () => {
     expect(answer).not.toContain("\nFeature:");
   });
 
-  it("A2: WHAT with relationships weaves attested edges in prose", () => {
+  it("A2: WHAT identity answers stay concise (no neighborhood dump)", () => {
     const context =
       contextFor("What is PEP-484?", [
         evidence(
@@ -131,8 +131,10 @@ describe("final polish: answer format, attribution, trace", () => {
       buildIdentityGroundedAnswer(context);
 
     expect(answer).toMatch(/PEP-484/i);
-    expect(answer).toMatch(/introduced Typing/i);
-    expect(answer).toMatch(/addressed Readability/i);
+    expect(answer).toMatch(/proposal/i);
+    expect(answer).not.toMatch(/introduced Typing/i);
+    expect(answer).not.toMatch(/addressed Readability/i);
+    expect(answer).not.toMatch(/Related grounded entities/i);
     expect(answer).not.toMatch(/Proposal:\s/);
   });
 

@@ -348,6 +348,45 @@ describe(
             sampleEvidence
           );
 
+        context.query =
+          "What is PEP-484?";
+
+        const { understandQuery } =
+          await import("../src/utils/query-understanding.js");
+
+        const { selectAnswerEvidence } =
+          await import("../src/utils/select-answer-evidence.js");
+
+        const understanding =
+          understandQuery(context.query);
+
+        context.understanding =
+          understanding;
+
+        const focused =
+          selectAnswerEvidence(
+            understanding,
+            context.evidence
+          );
+
+        context.evidence =
+          focused;
+
+        context.items =
+          focused.map(item => ({
+            entityId: item.entity.id,
+            entityType: item.entity.type,
+            label: item.entity.label,
+            source: item.entity.source,
+            confidence: item.entity.confidence,
+            score: item.score,
+            evidenceSource: item.source,
+            properties: item.entity.properties ?? {},
+            ...(item.relationship
+              ? { relationship: item.relationship }
+              : {})
+          }));
+
         const generated =
           await generator.generate(
             context

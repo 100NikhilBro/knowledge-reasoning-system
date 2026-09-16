@@ -36,6 +36,10 @@ import {
   formatSummarizationAnswer
 } from "../utils/execute-summarization.js";
 
+import {
+  buildPartialGroundedAnswer
+} from "../utils/build-partial-grounded-answer.js";
+
 /**
  * Deterministic / template-based answer generator.
  * Answers are produced only from the supplied grounded ReasoningContext.
@@ -102,18 +106,23 @@ implements AnswerGenerator {
 
     };
 
+    const natural =
+      context.comparison ??
+      buildPartialGroundedAnswer(context);
+
     const answer =
       context.summarizationResult
         ? formatSummarizationAnswer(context.summarizationResult)
         : context.analyticalResult
           ? formatAnalyticalAnswer(context.analyticalResult)
-          : context.comparison ??
-            context.items
-              .map(
-                item =>
-                  `${item.entityType}: ${item.label}`
-              )
-              .join("\n");
+          : natural.trim().length > 0
+            ? natural
+            : context.items
+                .map(
+                  item =>
+                    `${item.entityType}: ${item.label}`
+                )
+                .join("\n");
 
     const calibrated =
       calibrateAnswerConfidence({

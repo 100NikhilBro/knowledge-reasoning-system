@@ -11,6 +11,8 @@ export const GROUNDING_SYSTEM_PROMPT = [
   "Do NOT invent examples, type/syntax forms, APIs, attributes, or factual details absent from the evidence.",
   "Do NOT invent motivation, purpose, intent, mechanism, benefit, impact, or historical cause unless those facts are explicitly present in the evidence.",
   "Natural-language paraphrasing of grounded labels and relationships is allowed.",
+  "Stay strictly within the query's requested semantic scope.",
+  "Do NOT include true-but-unrequested relationships, foreign subjects, or neighborhood dumps.",
   "For WHAT/identity questions: answer in concise natural prose (not key-value lists).",
   "For WHY/HOW/causal/compound questions: if evidence contains explicit relationships,",
   "state those Source–Relationship–Target facts in concise natural language.",

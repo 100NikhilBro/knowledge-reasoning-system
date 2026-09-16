@@ -34,6 +34,11 @@ import {
   detectRelationshipBetweenQuery
 } from "./detect-relationship-between-query.js";
 
+import {
+  deriveAnswerEvidenceScope,
+  isPredicateInAnswerScope
+} from "./select-answer-evidence.js";
+
 import type {
   AnalyticalResult
 } from "./execute-analytical.js";
@@ -1772,6 +1777,55 @@ export function verifyAnswerAgainstIntent(
     }
   }
 
+  /*
+   * Query-scope dominance: true-but-unrequested predicates / foreign
+   * subjects in the answer exceed the requested semantic scope.
+   */
+  if (
+    !answerBoundsUnsupported(answer) &&
+    understanding.intent !== "SUMMARIZATION" &&
+    understanding.intent !== "OUT_OF_CORPUS"
+  ) {
+    const scope =
+      deriveAnswerEvidenceScope(understanding);
+
+    const spillover =
+      detectAnswerScopeSpillover(answer, scope, understanding);
+
+    if (spillover.length > 0) {
+      exceedsEvidence = true;
+      matchesIntent = false;
+      if (status === "SUPPORTED") {
+        status = "NOT_SUPPORTED";
+      }
+      reasons.push(
+        `Answer exceeds query scope: ${spillover.join("; ")}`
+      );
+      traceLines.push(
+        "Verification: answer exceeded query-focused evidence scope"
+      );
+    }
+
+    /*
+     * Fail closed when the answer asserts a requested predicate that is
+     * absent from the answer-relevant evidence context.
+     */
+    const assertedMissing =
+      detectAssertedMissingPredicates(answer, scope, context);
+
+    if (assertedMissing.length > 0) {
+      exceedsEvidence = true;
+      matchesIntent = false;
+      status = "NOT_SUPPORTED";
+      reasons.push(
+        `Answer asserts unsupported predicate(s): ${assertedMissing.join(", ")}`
+      );
+      traceLines.push(
+        "Verification: answer asserted missing requested evidence"
+      );
+    }
+  }
+
   if (
     matchesIntent &&
     !exceedsEvidence &&
@@ -1797,6 +1851,159 @@ export function verifyAnswerAgainstIntent(
 
 }
 
+function detectAnswerScopeSpillover(
+  answer: string,
+  scope: ReturnType<typeof deriveAnswerEvidenceScope>,
+  understanding: QueryUnderstanding
+): string[] {
+
+  const issues: string[] = [];
+
+  const predicateCues: Array<{
+    type: string;
+    cue: RegExp;
+  }> = [
+    { type: "ADDRESSES", cue: /\baddresses\b/i },
+    { type: "INTRODUCES", cue: /\bintroduces?\b|\bintroduced\b/i },
+    { type: "PROPOSED_BY", cue: /\bproposed by\b|\bwas proposed by\b/i },
+    { type: "RESULTS_IN", cue: /\bresults in\b|\bresulted in\b/i },
+    { type: "IMPLEMENTED_IN", cue: /\bimplemented in\b/i }
+  ];
+
+  if (
+    scope.mode === "focused_relationship" ||
+    scope.mode === "implication" ||
+    scope.mode === "compound" ||
+    scope.mode === "comparison" ||
+    (
+      scope.mode === "fact" &&
+      /^\s*what\s+(?:is|are)\b/i.test(understanding.originalQuery)
+    )
+  ) {
+    for (const entry of predicateCues) {
+      if (!entry.cue.test(answer)) {
+        continue;
+      }
+
+      if (!isPredicateInAnswerScope(scope, entry.type)) {
+        issues.push(`unrequested predicate ${entry.type}`);
+      }
+    }
+  }
+
+  /*
+   * Foreign PEP spillover: answer names a PEP that is not a focus subject.
+   */
+  const answerPeps =
+    answer.match(/\bPEP[\s_-]?(\d+)\b/gi) ?? [];
+
+  const focusPeps =
+    new Set(
+      scope.focusSubjects
+        .map(subject =>
+          subject.match(/\bPEP[\s_-]?(\d+)\b/i)?.[1]
+        )
+        .filter((value): value is string => Boolean(value))
+    );
+
+  if (
+    focusPeps.size > 0 &&
+    (
+      scope.mode === "fact" ||
+      scope.mode === "focused_relationship" ||
+      scope.mode === "implication" ||
+      scope.mode === "compound"
+    )
+  ) {
+    for (const match of answerPeps) {
+      const digits =
+        match.match(/(\d+)/)?.[1];
+
+      if (digits && !focusPeps.has(digits)) {
+        issues.push(`foreign subject PEP-${digits}`);
+      }
+    }
+  }
+
+  /*
+   * Path/bridge answers should not narrate proposers / concerns / decisions
+   * unless those predicates were requested.
+   */
+  if (
+    scope.mode === "path" &&
+    scope.requestedPredicates.length === 0
+  ) {
+    for (const entry of [
+      { type: "PROPOSED_BY", cue: /\bproposed by\b/i },
+      { type: "ADDRESSES", cue: /\baddresses\b/i },
+      { type: "RESULTS_IN", cue: /\bresults in\b|\bresulted in\b/i },
+      { type: "IMPLEMENTED_IN", cue: /\bimplemented in\b/i }
+    ] as const) {
+      if (entry.cue.test(answer)) {
+        issues.push(`unrequested path predicate ${entry.type}`);
+      }
+    }
+  }
+
+  void understanding;
+
+  return [...new Set(issues)];
+
+}
+
+function detectAssertedMissingPredicates(
+  answer: string,
+  scope: ReturnType<typeof deriveAnswerEvidenceScope>,
+  context: ReasoningContext
+): string[] {
+
+  if (
+    scope.mode !== "focused_relationship" &&
+    scope.mode !== "implication" &&
+    scope.mode !== "compound"
+  ) {
+    return [];
+  }
+
+  const present =
+    new Set(
+      [
+        ...context.evidence,
+        ...context.items.map(item => ({
+          relationship: item.relationship
+        }))
+      ]
+        .map(item => item.relationship?.type)
+        .filter((type): type is string => Boolean(type))
+    );
+
+  const cues: Array<{ type: string; cue: RegExp }> = [
+    { type: "ADDRESSES", cue: /\baddresses\b/i },
+    { type: "INTRODUCES", cue: /\bintroduces?\b|\bintroduced\b/i },
+    { type: "PROPOSED_BY", cue: /\bproposed by\b|\bwas proposed by\b/i },
+    { type: "RESULTS_IN", cue: /\bresults in\b|\bresulted in\b/i },
+    { type: "IMPLEMENTED_IN", cue: /\bimplemented in\b/i }
+  ];
+
+  const missing: string[] = [];
+
+  for (const entry of cues) {
+    if (!scope.requestedPredicates.includes(entry.type)) {
+      continue;
+    }
+
+    if (!entry.cue.test(answer)) {
+      continue;
+    }
+
+    if (!present.has(entry.type)) {
+      missing.push(entry.type);
+    }
+  }
+
+  return missing;
+
+}
 /**
  * Format a verification status line for the reasoning trace.
  */

@@ -72,6 +72,10 @@ import {
 } from "../utils/query-evidence-compatibility.js";
 
 import {
+  selectAnswerEvidence
+} from "../utils/select-answer-evidence.js";
+
+import {
   understandQuery
 } from "../utils/query-understanding.js";
 
@@ -254,9 +258,24 @@ implements ReasoningEngine {
 
         );
 
+      /*
+       * Step 4c
+       * Query-focused answer evidence selection.
+       * Topic-compatible neighbors may remain after Step 4b; only
+       * Tier 1–3 answer-relevant evidence may enter generation context.
+       */
+      const understanding =
+        understandQuery(request.query);
+
+      const answerEvidence =
+        selectAnswerEvidence(
+          understanding,
+          compatibleEvidence
+        );
+
       const groundedEvidenceSet = {
         evidence:
-          compatibleEvidence,
+          answerEvidence,
         ...(synthesized.comparison !== undefined
           ? { comparison: synthesized.comparison }
           : {})
@@ -279,7 +298,7 @@ implements ReasoningEngine {
         request.query;
 
       context.understanding =
-        understandQuery(request.query);
+        understanding;
 
       /*
        * Step 5b (P6)

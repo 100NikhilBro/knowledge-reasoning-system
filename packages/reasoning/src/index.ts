@@ -166,6 +166,16 @@ export type {
 } from "./utils/detect-comparison-request.js";
 
 export {
+  deriveAnswerEvidenceScope,
+  selectAnswerEvidence,
+  isPredicateInAnswerScope
+} from "./utils/select-answer-evidence.js";
+
+export type {
+  AnswerEvidenceScope
+} from "./utils/select-answer-evidence.js";
+
+export {
   compareEvidence,
   buildStructuredComparison
 } from "./utils/compare-evidence.js";

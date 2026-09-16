@@ -144,6 +144,14 @@ export function buildIdentityGroundedAnswer(
       ? `${code} (${primary.label}) is a ${primary.entityType.toLowerCase()}.`
       : `${primary.label} is a ${primary.entityType.toLowerCase()}.`;
 
+  /*
+   * "What is X?" answers stay identity-focused. Relationship dumps belong
+   * to relationship intents — not FACT identity asks.
+   */
+  if (isIdentityQuery(context.query)) {
+    return lead;
+  }
+
   if (relational) {
     return `${lead} ${relational}`;
   }
