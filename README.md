@@ -1,6 +1,6 @@
 # Knowledge Reasoning System
 
-Evidence-grounded Q&A over Python PEP documents. Combines Neo4j knowledge graph and Qdrant vector index, with claim-level verification and reasoning traces.
+A domain-specific reasoning system over Python PEP documents. Combines a Neo4j knowledge graph and Qdrant vector index with hybrid NLU, multi-hop reasoning, conservative soft implication, and claim-level verification to produce evidence-backed, traceable answers with fail-closed behavior.
 
 
 ---
@@ -22,8 +22,6 @@ pnpm dev:worker
 pnpm dev:web
 ```
 
-
----
-
 Still learning, improving, and refining this project whenever I get time.
 If you want to improve, you are welcome.
+
