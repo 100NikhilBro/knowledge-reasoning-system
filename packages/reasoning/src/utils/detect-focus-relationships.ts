@@ -29,7 +29,22 @@ export function detectFocusRelationships(
      */
     /\b(?:did|does|do)\b[\s\S]{0,120}?\bpropos(?:e|es)\b/.test(
       normalized
-    )
+    ) ||
+    /*
+     * Inverted propose: "By whom was X proposed?"
+     */
+    /\bby\s+whom\b[\s\S]{0,120}?\bproposed\b/.test(normalized) ||
+    /\bwhom\b[\s\S]{0,80}?\bwas\b[\s\S]{0,80}?\bproposed\b/.test(
+      normalized
+    ) ||
+    /*
+     * Author-noun wording → same PROPOSED_BY edge.
+     */
+    /\b(?:the\s+)?author\s+of\b/.test(normalized) ||
+    /*
+     * Direct write authorship ask; exclude "who wrote about …".
+     */
+    /\bwho\s+wrote\b(?!\s+about\b)/.test(normalized)
   ) {
     focuses.push("PROPOSED_BY");
   }

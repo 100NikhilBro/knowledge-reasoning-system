@@ -323,6 +323,70 @@ describe("detectFocusRelationships", () => {
       )
     ).toBeUndefined();
   });
+
+  it("detects PROPOSED_BY for inverted by-whom proposed wording", () => {
+    expect(
+      detectFocusRelationships(
+        "By whom was PEP-484 proposed?"
+      )
+    ).toEqual(["PROPOSED_BY"]);
+
+    expect(
+      classifyQueryIntent(
+        "By whom was PEP-484 proposed?"
+      )
+    ).toBe("RELATIONSHIP");
+  });
+
+  it("detects PROPOSED_BY for author-of and who-wrote wording", () => {
+    for (const query of [
+      "Who is the author of PEP-484?",
+      "Who was the author of PEP-484?",
+      "Who is author of PEP-484?",
+      "Who wrote PEP-484?"
+    ]) {
+      expect(
+        detectFocusRelationships(query),
+        query
+      ).toEqual(["PROPOSED_BY"]);
+
+      expect(
+        classifyQueryIntent(query),
+        query
+      ).toBe("RELATIONSHIP");
+    }
+
+    expect(
+      detectFocusRelationships(
+        "Who wrote about PEP-484?"
+      )
+    ).toBeUndefined();
+
+    expect(
+      detectFocusRelationships(
+        "What is the author status of Python?"
+      )
+    ).toBeUndefined();
+  });
+
+  it("preserves previously fixed PROPOSED_BY controls", () => {
+    for (const query of [
+      "Who proposed PEP-484?",
+      "Was PEP-484 proposed by Guido van Rossum?",
+      "Did Guido van Rossum propose PEP-484?",
+      "Who authored PEP-484?"
+    ]) {
+      expect(
+        detectFocusRelationships(query),
+        query
+      ).toContain("PROPOSED_BY");
+
+      expect(
+        classifyQueryIntent(query),
+        query
+      ).toBe("RELATIONSHIP");
+    }
+  });
 });
 
 describe("who-proposed relationship focus", () => {
